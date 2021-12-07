@@ -1,11 +1,47 @@
-# Dissemination
+# Reproduction
 
-This folder contains realized subprojects that focus on the dissemination of the study's results:
+This folder contains all necessary data, scripts and instructions to *fully reproduce* the results of the study. This is a simulation study building on semi-synthetic data, therefore, all results should be reproducible using only the non-synthetic data source, the developed R-code and the indicated R-packages.
 
--   *Thesis manuscript (not reviewed)*: I report the final results of this study in a thesis manuscript, which takes the form of a research article. For presentation purposes I have used the template of the open-access Journal of Spatial Information Sciences (JOSIS). The thesis will be submitted in 2022. The folder contains the final version in .pdf and the source objects. You can find more info on the journal [here](http://josis.xyz/index.php/josis).
+For easier and speedier reproduction of certain parts, we have uploaded interim data objects to a cloud service. This makes *partial reproductions* possible. Unfortunately, we cannot create a simple link because the Utrecht University administrators only allow sharing the folders with specified people. Therefore, please just write an [email](marcoramljak@googlemail.com) and the folder will be shared with you, without any restrictions.
 
--   *Lightning-Talk at The Use of R in Official Statistics (uRos) 2021 Conference:* In the presentation, the research design of this study was used as an example of the MNO-simulator workflow. This folder contains the final version in .pdf and in .ppt. Furthermore, you watch the video of the presentation [here](https://youtu.be/kjUtApjK6XE?t=4529) and more info on the conference [here](https://r-project.ro/conference2021.html).
+## For a **full reproduction**, please execute the following steps:
 
--   *Poster Presentation at the Royal Statistical Society (RSS) 2021*: The poster reports preliminary results and was presented physically and online. This folder contains the final version in .pdf and .ppt - both in A0 and A4 size. You can find more info on the conference [here](https://virtual.oxfordabstracts.com/#/event/public/1880/program).
+-   Clone/Fork/Download this repository.
 
--   *Interim Research Report:* A short report for the masters program describing preliminary results. This folder contains the final version in .pdf and .rmarkdown.
+-   Download the [2011 German census data on a regular grid](https://www.zensus2011.de/SharedDocs/Downloads/DE/Pressemitteilung/DemografischeGrunddaten/csv_Bevoelkerung_100m_Gitter.zip;jsessionid=2447684734B1934C8AD8042D9236B37A.live931?__blob=publicationFile&v=2). Further info on the file can be found [here](https://www.zensus2011.de/DE/Home/Aktuelles/DemografischeGrunddaten.html?nn=3065474).
+
+-   Unzip the downloaded file into the [Data](https://github.com/R-ramljak/MNO_uncertainty/tree/main/Reproduction/Data) folder.
+
+-   If RStudio is available, open the [MNO_uncertainty.Rproj](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/MNO_uncertainty.Rproj) file for easier path management.
+
+-   Run the the [Munich_generate.R](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Code/Munich_generate.R) script. Make sure the object [munich.rds]() is saved in the Data folder.
+
+-   Make sure the object `munich.rds` is saved. For convenience purposes, the folder already contains this processed [file](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Data/munich.rds).
+
+-   Run the notebook script [Generation of network scenarios](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Generation%20of%20network%20scenarios.Rmd). Here we generate the network scenarios. Make sure the object `gen.model.objects` is saved.
+
+-   Run the notebook script [Model_mismatch](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Model_mismatch.Rmd). Here we run the estimations and evaluate the results.
+
+Depending on the fact if you use the RStudio project file, file path adjustment is necessary.
+
+## For a **partial reproduction**, please execute the following steps:
+
+-   Clone/Fork/Download this repository.
+
+-   Make sure that you have access to the interim data objects and copy them into the predefined Data folder.
+
+-   If RStudio is available, open the [MNO_uncertainty.Rproj](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/MNO_uncertainty.Rproj) file for easier path management.
+
+-   Depending on which results you want to reproduce or which other code blocks you want to experiment with, you can follow this [file](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Data/interim%20objects%20list.txt). It describes which `*.rds` contains which information and where it is loaded into one of the two main notebooks.
+
+
+## License
+
+We want to encourage reproduction and further experimentation. Please let us know if you encounter mistakes or problems.
+
+|           |                                                                                                                                                             |
+|-----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| *authors* | Ramljak M.                                                                                                                  |
+| *version* | 1.0                                                                                                                                                         |
+| *status*  | 2021 - closed                                                                                                                                               |
+| *license* | [EUPL](https://joinup.ec.europa.eu/sites/default/files/custom-page/attachment/eupl_v1.2_en.pdf) *(concerning the source code, please cite this repository)* |
