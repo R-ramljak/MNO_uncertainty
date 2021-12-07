@@ -14,7 +14,7 @@ For easier and speedier reproduction of certain parts, we have uploaded interim 
 
 -   If RStudio is available, open the [MNO_uncertainty.Rproj](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/MNO_uncertainty.Rproj) file for easier path management.
 
--   Run the the [Munich_generate.R](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Code/Munich_generate.R) script. Make sure the object [munich.rds]() is saved in the Data folder.
+-   Run the the [Munich_generate.R](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Munich_generate.R) script. Make sure the object [munich.rds]() is saved in the Data folder.
 
 -   Make sure the object `munich.rds` is saved. For convenience purposes, the folder already contains this processed [file](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Data/munich.rds).
 
