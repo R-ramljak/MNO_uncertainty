@@ -4,6 +4,18 @@ This folder contains all necessary data, scripts and instructions to *fully repr
 
 For easier and speedier reproduction of certain parts, we have uploaded interim data objects to a cloud service. This makes *partial reproductions* possible. Unfortunately, we cannot create a simple link to share in this repo because the Utrecht University administrators only allow sharing the folders with specified people. Therefore, please just write an [email](marcoramljak@googlemail.com) and the folder will be shared with you, without any restrictions.
 
+This study follows the logics of the MNO-simulator workflow, see the figure below. For this we developed four scripts, two regular `\*.R` scripts and two `\*.Rmd` notebooks. We have chosen the notebook format for the main simulation steps as this format allows for easy combination of code, results/plots and description/interpretation.
+
+-   `pipeline functions.R`: Contains all developed custom functions and needs to be preloaded via `source()` for the further notebooks to work. This is basically the heart of the MNO-simulator workflow.
+
+-   `Munich_generate.R`: Processes the raw census data to make it manageable for the the three modules.
+
+-   `Generation of network scenarios.Rmd`: Generates the mobile phone population and the four network scenarios, as well as performs the phone-to-cell association task (module: Generation). This notebook is also the basis for the supplementary material, which can be found [here](.)
+
+-   `Model_mismatch.Rmd`: Here we develop all necessary estimation models and run the different deterministic and probabilistic estimators (module: Estimation). Furthermore, we evaluate the results by means of KWD and create the final result plots (module: Evaluation).
+
+![Analysis plan according to the MNO-simulator workflow](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/analysis%20plan.png)
+
 ## For a **full reproduction**, please execute the following steps:
 
 -   Clone/Fork/Download this repository.
@@ -34,14 +46,13 @@ Depending on the fact if you use the RStudio project file, file path adjustment 
 
 -   Depending on which results you want to reproduce or which other code blocks you want to experiment with, you can follow this [file](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Data/interim%20objects%20list.txt). It describes which `*.rds` contains which information and where it is loaded into one of the two main notebooks.
 
-
 ## License
 
 We want to encourage reproduction and further experimentation. Please let us know if you encounter mistakes or problems.
 
 |           |                                                                                                                                                             |
 |-----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| *authors* | Ramljak M.                                                                                                                  |
+| *authors* | Ramljak M.                                                                                                                                                  |
 | *version* | 1.0                                                                                                                                                         |
 | *status*  | 2021 - closed                                                                                                                                               |
 | *license* | [EUPL](https://joinup.ec.europa.eu/sites/default/files/custom-page/attachment/eupl_v1.2_en.pdf) *(concerning the source code, please cite this repository)* |
