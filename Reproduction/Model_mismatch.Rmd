@@ -1,0 +1,934 @@
+---
+title: "Model mismatch"
+date: "`r Sys.Date()`"
+output:
+  bookdown::html_document2:
+    code_folding: show
+    code_download: true
+    theme: sandstone
+    toc: true
+    toc_float: true
+    number_sections: true
+    fig_caption: yes
+---
+
+```{r setup, message=FALSE}
+# Data manipulation
+library(tidyverse)
+library(data.table) 
+
+# Spatial operations
+library(sf)
+library(raster)
+library(stars)
+
+# Matrix operations
+library(Matrix)
+
+# MNO data handling and propagation model setup
+# Credits to Prof. Martijn Tennekes https://github.com/mtennekes/mobloc
+library(mobloc)
+
+# Comparison of 2d histograms (Kantorovitch Wasserstein distance a.k.a. Earth Movers distance)
+# Credits to Prof. Stefano Gualandi https://cran.r-project.org/web/packages/SpatialKWD/SpatialKWD.pdf
+library(SpatialKWD)
+
+# Output organisation and plotting support
+library(ggthemes)
+library(viridis)
+library(ggrepel)
+library(ggpointdensity)
+library(scattermore)
+library(grid)
+library(gridExtra)
+library(knitr)
+library(DT)
+
+# seed for reproducibility
+set.seed(42)
+
+
+# Loading Custom functions
+source("pipeline functions.R")
+
+# Load toyworld objects 
+area <- readRDS("workflow_objects/area.rds")
+cellplans.list <- readRDS("workflow_objects/cellplans.list.rds")
+gen.model.objects <- readRDS("workflow_objects/gen.model.objects.rds")
+```
+
+## Model mismatch techniques
+
+### Random noise implementation
+
+```{r noise-implementation}
+# define the number of bits --> final number of levels are 2^n
+noise.expression <- c(no.03 = "runif(min = -3, max = 3",
+                      no.06 = "runif(min = -6, max = 6",
+                      no.09 = "runif(min = -9, max = 9",
+                      no.12 = "runif(min = -12, max = 12",
+                      no.15 = "runif(min = -15, max = 15",
+                      no.18 = "runif(min = -18, max = 18",
+                      no.21 = "runif(min = -21, max = 21",
+                      no.true = "runif(min = 0, max = 0")
+
+noise.expression.wo.true <- names(noise.expression)[!names(noise.expression) == ("no.true")]
+noise.expression.only.true <- names(noise.expression)[names(noise.expression) == ("no.true")]
+
+
+noise_mag <- function(x, expression, digits) {
+  
+  n <- length(x)
+  
+  expression.comp <- paste0(expression, ", n = ", n, ")")
+    
+  amount <- eval(parse(text = expression.comp))
+  
+  final <- x + round(amount, digits = digits)
+  
+  return(final)
+  
+  
+}
+
+noise_mutate <- function(df, noise.expression, digits) {
+  
+  mutate(df, "dBm.noise.{noise.expression}" := noise_mag(x = dBm, expression = noise.expression, digits = digits))
+}
+
+
+P.long.noise.df.helper <- cellplans.list %>% 
+  map(~mutate(.x$signal.strength.comb.dt, cell.kind = substr(cell, 1, 2))) %>% 
+  map2(., cellplans.list, ~left_join(.x, .y$param.df, by = "cell.kind")) %>% 
+  map_dfr(~dplyr::rename(., sig_d_th = dominance.th), .id = "network.kind") %>% 
+  group_by(network.kind)
+
+set.seed(222)
+
+P.long.noise.complete.df <- noise.expression %>% 
+  map(~noise_mutate(df = P.long.noise.df.helper, noise.expression = .x, digits = 2)) %>% 
+  map(~ungroup(.)) %>% 
+  map2(., names(noise.expression), ~rename(.x, !!.y := starts_with("dBm.noise."))) %>% 
+  map_at(noise.expression.wo.true, ~dplyr::select(., starts_with("no."))) %>%
+  bind_cols() %>% 
+  pivot_longer(cols = starts_with("no."), names_to = "noise.level", values_to = "noise.mag") %>% 
+  split(list(.$network.kind, .$noise.level)) %>% 
+  map(~mutate(., s.mismatch.mag = db2s(noise.mag, midpoint, steepness)))
+
+names.network.noise <- names(P.long.noise.complete.df)
+
+P.long.noise.df <- P.long.noise.complete.df %>% 
+  map(~dplyr::select(., network.kind, matches("tile.id|cell"), noise.level, s.mismatch.mag, sig_d_th)) %>% 
+  map(~left_join(., area$area.prior, by = "tile.id.chr")) %>% 
+  map(~filter(., !s.mismatch.mag < 0.05)) %>% # define minimum threshold 
+  map(~mutate(., pij = con_llh_sens_custom(., "s.mismatch.mag", digits = 3)))
+
+# saveRDS(P.long.noise.df, "workflow_objects/P.long.noise.df.rds")  
+P.long.noise.df <- readRDS("results/P.long.noise.df.rds")
+```
+
+
+```{r}
+# noise on the dBm scale
+order.levels.noise <- c(noise.expression.only.true, noise.expression.wo.true)
+dense.names.noise <- names(P.long.noise.df) %>% 
+  str_subset("cellplan.3") 
+
+(dBm.plot.ME <- P.long.noise.complete.df %>%
+  magrittr::extract(dense.names.noise) %>% 
+  map_dfr(~dplyr::select(., cell, cell.kind, tile.id.num, noise.mag, noise.level)) %>% 
+  filter(cell == ("ME.123.C.2")) %>% 
+  mutate(noise.level = factor(noise.level, levels = order.levels.noise)) %>% 
+  left_join(area$area.sf, by = "tile.id.num") %>% 
+  st_as_sf() %>% 
+  ggplot() +
+  geom_sf(aes(fill = noise.mag), color = "transparent") +
+  scale_fill_viridis(na.value = "transparent") +
+  facet_wrap(vars(noise.level), ncol = 3) +
+  coord_sf() +
+  labs(title = "Meso noise on the dBm scale without minimum threshold", 
+       color = "dBm", fill = "dBm", x = "", y = "") +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "bottom"))
+# ggsave("workflow_objects/noise.dBm.plot.ME.png", dBm.plot.ME, device = "png")
+```
+
+```{r}
+# noise on the signal dominance scale
+
+# paper.filter.noise <- order.levels.noise %>% 
+#   str_subset(pattern = "03|06|12|18|21")
+
+(dom.plot.ME.noise <- P.long.noise.df %>% 
+    magrittr::extract(dense.names.noise) %>% 
+    map_dfr(~dplyr::select(., cell, cell.kind, tile.id.num, s.mismatch.mag, noise.level)) %>% 
+    filter(cell == ("ME.100.C.2")) %>% 
+    mutate(noise.level = factor(noise.level, levels = order.levels.noise)) %>% 
+    # filter(noise.level %in% paper.filter.noise) %>% 
+    left_join(area$area.sf, by = "tile.id.num") %>% 
+    st_as_sf() %>% 
+    ggplot() +
+    geom_sf(aes(fill = s.mismatch.mag), color = "transparent") +
+    scale_fill_viridis(na.value = "transparent") +
+    facet_wrap(vars(noise.level), ncol = 4) +
+    coord_sf() +
+    labs(
+      title = "Meso noise on the dominance scale",
+      color = "Signal\ndominance", fill = "Signal\ndominance",
+      x = "", y = "") +
+    theme_bw() +
+    theme(axis.text.x = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.ticks.y = element_blank(),
+          legend.position = "bottom",
+          rect = element_rect(fill = "transparent")))
+ggsave("workflow_objects/noise.dom.plot.ME.w.th.png", dom.plot.ME.noise, device = "png", bg = "transparent",
+       height = 5)
+# ggsave("Final Plots/noise.dom.plot.ME.eps", dom.plot.ME, device = "eps")
+```
+
+### Quantization
+
+```{r}
+# define the number of bits --> final number of levels are 2^n + 1
+
+quant.levels <- c(
+  quant.00 = 0,
+  quant.01 = 1,
+  quant.02 = 2,
+  quant.03 = 3,
+  quant.04 = 4,
+  quant.05 = 5,
+  quant.10 = 10,
+  quant.true = 0) # last version is just a placeholder, the "0" is meaningless
+
+quant.levels.wo.true <- names(quant.levels)[!names(quant.levels) == ("quant.true")]
+quant.levels.only.true <- names(quant.levels)[names(quant.levels) == ("quant.true")]
+
+
+
+quant_mutate <- function(df, n) {
+  mutate(df, "s.quant.{n}" := quantize_mag(x = s, n = n))
+}
+
+
+P.long.quant.df.helper <- cellplans.list %>% 
+  map(~mutate(.x$signal.strength.comb.dt, cell.kind = substr(cell, 1, 2))) %>% 
+  map2(., cellplans.list, ~left_join(.x, .y$param.df, by = "cell.kind")) %>% 
+  map_dfr(~dplyr::rename(., sig_d_th = dominance.th), .id = "network.kind") %>% 
+  group_by(network.kind, cell.kind) 
+
+P.long.quant.complete.df <- quant.levels %>% 
+  map(~quant_mutate(df = P.long.quant.df.helper, n = .x)) %>% 
+  map(ungroup) %>% 
+  map_at(quant.levels.only.true, ~mutate(., s.quant.true = s)) %>% 
+  map_at(quant.levels.only.true, ~dplyr::select(., -s.quant.0)) %>% 
+  map2(., names(quant.levels), ~rename(.x, !!.y := starts_with("s.quant."))) %>% 
+  map_at(quant.levels.wo.true, ~dplyr::select(., starts_with("quant."))) %>%
+  bind_cols() %>% 
+  pivot_longer(cols = starts_with("quant."), names_to = "quant.level", values_to = "quant.mag") %>% 
+  split(list(.$network.kind, .$quant.level))
+  
+names.network.quant <- names(P.long.quant.complete.df)
+
+P.long.quant.df <- P.long.quant.complete.df %>% 
+    map(~dplyr::select(., network.kind, matches("tile.id|cell"), quant.level, quant.mag, sig_d_th)) %>% 
+  map(~left_join(., area$area.prior, by = "tile.id.chr")) %>% 
+  map(~filter(., !quant.mag < 0.05)) %>% # define minimum threshold 
+  map(~mutate(., pij = con_llh_sens_custom(., "quant.mag", digits = 3))) 
+
+# saveRDS(P.long.quant.df, "workflow_objects/P.long.quant.df.rds")  
+P.long.quant.df <- readRDS("results/P.long.quant.df.rds")
+
+```
+
+```{r}
+# quantization on the dominance scale without threshold
+order.levels.quant <- c(quant.levels.only.true, rev(quant.levels.wo.true))
+dense.names.quant <- names(P.long.quant.df) %>% 
+  str_subset("cellplan.3") 
+
+(dom.plot.ME <- P.long.quant.complete.df %>% 
+    magrittr::extract(dense.names.quant) %>% 
+    map_dfr(~dplyr::select(., cell, cell.kind, tile.id.num, quant.mag, quant.level)) %>% 
+    filter(cell == ("ME.100.C.2")) %>% 
+    mutate(quant.level = factor(quant.level, levels = order.levels.quant)) %>% 
+    left_join(area$area.sf, by = "tile.id.num") %>% 
+    st_as_sf() %>% 
+    ggplot() +
+    geom_sf(aes(fill = quant.mag), color = "transparent") +
+    scale_fill_viridis(na.value = "transparent") +
+    facet_wrap(vars(quant.level), ncol = 3) +
+    coord_sf() +
+    labs(title = "Meso quantization on the dominance scale without minimum threshold", 
+         color = "Signal\ndominance", fill = "Signal\ndominance", x = "", y = "") +
+    theme(axis.text.x = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.ticks.y = element_blank(),
+          legend.position = "bottom"))
+# ggsave("workflow_objects/quant.dom.plot.ME.wo.th.png", dom.plot.ME, device = "png")
+```
+
+```{r}
+# quantization on the dominance scale with threshold
+
+# paper.filter.quant <- order.levels.quant %>% 
+#   str_subset(pattern = "10|04|03|01|00")
+
+(dom.plot.ME.th.quant <- P.long.quant.df %>% 
+    magrittr::extract(dense.names.quant) %>% 
+    map_dfr(~dplyr::select(., cell, cell.kind, tile.id.num, quant.mag, quant.level)) %>% 
+    filter(cell == ("ME.100.C.2")) %>%
+    mutate(quant.level = factor(quant.level, levels = order.levels.quant)) %>% 
+    # filter(quant.level %in% paper.filter.quant) %>% 
+    left_join(area$area.sf, by = "tile.id.num") %>% 
+    st_as_sf() %>% 
+    ggplot() +
+    geom_sf(aes(fill = quant.mag), color = "transparent") +
+    scale_fill_viridis(na.value = "transparent") +
+    facet_wrap(vars(quant.level), ncol = 4) +
+    coord_sf() +
+    labs(
+      title = "Meso quantization on the dominance scale",
+      color = "Signal\ndominance", fill = "Signal\ndominance",
+         x = "", y = "") +
+    theme_bw() +
+    theme(axis.text.x = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.ticks.y = element_blank(),
+          legend.position = "bottom",
+          rect = element_rect(fill = "transparent")))
+ggsave("workflow_objects/quant.dom.plot.ME.w.th.png", dom.plot.ME.th.quant, device = "png", bg = "transparent",
+       height = 5)
+# ggsave("Final Plots/quant.dom.plot.ME.w.th.eps", dom.plot.ME.th, device = "eps")
+```
+
+```{r}
+cell.kind.unique <- n_distinct(cellplans.list$cellplan.1$param.df$cell.kind)
+range.total <- rep(seq(10, 20000, by = 10), cell.kind.unique)
+length.range.total <- rep(length(range.total) / cell.kind.unique, cell.kind.unique)
+
+# use the helpers to construct plot dataframe and join with the input params
+df <- tibble(cell.kind = factor(rep(cellplans.list$cellplan.1$param.df$cell.kind, length.range.total)),
+             distance = range.total) %>%
+  left_join(cellplans.list$cellplan.1$param.df, by = "cell.kind") %>%
+  mutate(dBm = W2dBm(W)) %>%
+  mutate(distance.log10 = log10(distance)) %>%
+  mutate(dBm = distance2dB(distance, ple, W)) %>%
+  mutate(s = db2s(dBm,
+                  midpoint = midpoint,
+                  steepness = steepness))
+
+### theoretical quantization vs true
+new.df.theo.vars <- quant.levels %>%
+  map(~quant_mutate(df = df, n = .x)) %>%
+  map_at(quant.levels.only.true, ~mutate(., s.quant.true = s)) %>%
+  map_at(quant.levels.only.true, ~dplyr::select(., -s.quant.0)) %>%
+  map2(., names(quant.levels), ~rename(.x, !!.y := starts_with("s.quant."))) %>%
+  map_at(quant.levels.wo.true, ~dplyr::select(., starts_with("quant."))) %>%
+  bind_cols() %>%
+  pivot_longer(cols = starts_with("quant."), names_to = "quant.level", values_to = "quant.mag") %>%
+  mutate(below.dominance.th = case_when(quant.mag >= 0.05 ~ "Above",
+                                        quant.mag < 0.05 ~ "Below"))
+
+
+(theo.quant.plot.new <- new.df.theo.vars %>%
+    mutate(quant.level = factor(quant.level, levels = order.levels.quant)) %>% 
+  # filter(!quant.level %in% c("quant.04", "quant.05")) %>%
+  ggplot() +
+  # geom_point(aes(x = s, y = quant.mag, color = quant.level, group = quant.level))
+  geom_line(aes(x = s, y = quant.mag,
+                color = quant.level),
+            size = 1) +
+  facet_wrap(vars(quant.level), ncol = 4) +
+  labs(x = "True signal dominance",
+       y = "Quantized signal dominance",
+       color = "Quant. Version") +
+  theme_bw() +
+  theme(legend.position = "bottom"))
+ggsave("workflow_objects/theo.quant.plot.new.png", theo.quant.plot.new, device = "png")
+```
+
+## Estimation 
+
+### Preparing the parameter lists
+
+#### Probabilistic Estimators
+
+```{r estimation-input-parameters}
+P.long.mismatch.complete <- c(P.long.noise.df, P.long.quant.df) %>%
+  discard(str_detect(names(.), "quant.true")) 
+mismatch.versions <- names(P.long.mismatch.complete)
+
+P.long.names <- c(names(noise.expression), names(quant.levels)) %>% 
+  str_subset("quant.true", negate = T)
+
+
+# Each toyworld produces a separate c.vector, however it stays consistent within each toyworld.
+
+
+### C vector, adding antennas that have 0 phones to complete the vector, arranging it according to the antenna.ID and saving as vector
+c.vec <- gen.model.objects$P.long.complete.df %>%
+  map(~distinct(., cell.num, phones.sum)) %>%
+  map2(., cellplans.list, ~right_join(.x, .y$cellplan.combined.df, by = "cell.num")) %>%
+  map(~mutate(., phones.sum = case_when(is.na(phones.sum) ~ 0,
+                                TRUE ~ phones.sum))) %>%
+  map(~arrange(., cell.num))
+
+
+# Number of priors
+n.prior <- names(area$area.df) %>% 
+  str_count("prior") %>% 
+  sum()
+  
+
+### final list objects
+
+# P.star
+P.long.mismatch.parameter.list <- P.long.mismatch.complete %>% 
+  rep(n.prior) %>% 
+  .[order(names(.))] # order alphabetically because it also has toyworld name in
+
+# c.vec
+c.vec.parameter.list <- c.vec %>%
+  map(~data.table(i = .x$cell.num, c = .x$phones.sum)) %>% 
+  rep(length(P.long.names) * n.prior) %>% 
+  .[order(names(.))] # order alphabetically as above
+
+# prior name
+prior.parameter.list <- names(area$area.df) %>% 
+  str_subset("prior") %>% 
+  rep(length(mismatch.versions)) %>% 
+  as.list() #dont order alphabetically as it should alternate
+
+
+prob.est.input.names <- cross(list(unique(names(c.vec.parameter.list)),
+                                   P.long.names,
+                                   unique(prior.parameter.list))) %>% 
+  map(lift(paste, sep = "_")) %>% 
+  set_names(unlist(.)) %>% 
+  .[order(names(.))] # order alphabetically 
+
+# parameter list for probability based estimators
+prob.est.input.list <- list(c = c.vec.parameter.list,
+                            P = P.long.mismatch.parameter.list,
+                            a = prior.parameter.list) %>% 
+  map(~set_names(., prob.est.input.names)) ### is this the correct order (qm))))
+
+
+# number of iterations
+n.iter.MLE = 200
+```
+
+
+#### Determnistic Parameters
+
+```{r estimation-input-parameters}
+
+cellplan.combined.parameter.list <- flatten(cellplans.list) %>% 
+  keep(str_detect(names(.), "cellplan.combined.df")) %>%
+  set_names(names(cellplans.list)) %>% 
+  rep(n.prior) %>% 
+  .[order(names(.))] # order alphabetically as above
+
+signal.strength.comb.dt.parameter.list <- flatten(cellplans.list) %>% 
+  keep(str_detect(names(.), "signal.strength.comb.dt")) %>% 
+  set_names(names(cellplans.list)) %>% 
+  rep(n.prior) %>% 
+  .[order(names(.))] # order alphabetically as above
+
+C.vec.df.parameter.list <- gen.model.objects$C.vec.df.list %>% 
+  rep(n.prior) %>% 
+  .[order(names(.))] # order alphabetically as above
+
+
+prior.var.parameter.list <- names(area$area.df) %>% 
+  str_subset("prior") %>% 
+  rep(length(names(cellplans.list))) %>% 
+  as.list() #dont order alphabetically as it should alternate
+
+det.est.input.names <- cross(list(unique(names(C.vec.df.parameter.list)),
+                                   unique(prior.var.parameter.list))) %>% 
+  map(lift(paste, sep = "_")) %>% 
+  set_names(unlist(.)) %>% 
+  .[order(names(.))] # order alphabetically 
+
+# parameter list for deterministic estimators
+VOR.input.list <- list(cellplan.combined = cellplan.combined.parameter.list, 
+                       signal.strength.comb.dt = signal.strength.comb.dt.parameter.list, 
+                       C.vec.df = C.vec.df.parameter.list,
+                       prior.var = prior.var.parameter.list) %>% 
+  map(~set_names(., det.est.input.names))
+```
+
+
+
+
+### Voronoi estimators
+
+```{r VOR.tower, warning=FALSE, echo=FALSE, out.width="50%"}
+# Voronoi estimation with tower locations as seeds
+VOR.tower.names.est <- paste0("u.VOR.tower_", det.est.input.names)
+VOR.tower <- pmap(VOR.input.list, ~VOR_est(area = area, 
+                                           cellplan.combined = ..1, 
+                                           signal.strength.comb.dt = ..2, 
+                                           C.vec.df = ..3, 
+                                           prior.var = ..4,
+                                           seed = "tower"))
+
+VOR.tower.est <- VOR.tower %>% 
+  map(~mutate(.x$seed.voronoi.final, tile.id.chr = as.character(tile.id))) %>% 
+  map_at(c(1), ~dplyr::select(., tile.id.chr, u.VOR)) %>% 
+  map_at(-c(1), ~dplyr::select(., u.VOR)) %>% 
+  map2(., VOR.tower.names.est, ~rename_with(.x, 
+                                            stringr::str_replace, 
+                                            pattern = "u.VOR", replacement = .y, 
+                                            .cols = starts_with("u.VOR"))) %>% 
+  bind_cols()
+```
+
+```{r VOR.offset, warning=FALSE, echo=FALSE, out.width="50%"}
+# Voronoi estimation with cell locations + offset as seeds
+VOR.offset.names.est <- paste0("u.VOR.offset_", det.est.input.names)
+VOR.offset <- pmap(VOR.input.list, ~VOR_est(area = area, 
+                                            cellplan.combined = ..1, 
+                                            signal.strength.comb.dt = ..2, 
+                                            C.vec.df = ..3, 
+                                            prior.var = ..4,
+                                            seed = "cell.offset",
+                                            offset = 10)) 
+
+VOR.offset.est <- VOR.offset %>% 
+  map(~mutate(.x$seed.voronoi.final, tile.id.chr = as.character(tile.id))) %>% 
+  map_at(c(1), ~dplyr::select(., tile.id.chr, u.VOR)) %>% 
+  map_at(-c(1), ~dplyr::select(., u.VOR)) %>% 
+  map2(., VOR.offset.names.est, ~rename_with(.x, 
+                                            stringr::str_replace, 
+                                            pattern = "u.VOR", replacement = .y, 
+                                            .cols = starts_with("u.VOR"))) %>% 
+  bind_cols()
+```
+
+```{r VOR.barycenter, warning=FALSE, echo=FALSE, out.width="50%"}
+# Voronoi estimation with cell barycenter locations as seeds
+VOR.barycenter.names.est <- paste0("u.VOR.barycenter_", det.est.input.names)
+VOR.barycenter <- pmap(VOR.input.list, ~VOR_est(area = area, 
+                                                cellplan.combined = ..1, 
+                                                signal.strength.comb.dt = ..2, 
+                                                C.vec.df = ..3, 
+                                                prior.var = ..4,
+                                                seed = "cell.barycenter")) 
+
+VOR.barycenter.est <- VOR.barycenter %>% 
+  map(~mutate(.x$seed.voronoi.final, tile.id.chr = as.character(tile.id))) %>% 
+  map_at(c(1), ~dplyr::select(., tile.id.chr, u.VOR)) %>% 
+  map_at(-c(1), ~dplyr::select(., u.VOR)) %>% 
+  map2(., VOR.barycenter.names.est, ~rename_with(.x, 
+                                            stringr::str_replace, 
+                                            pattern = "u.VOR", replacement = .y, 
+                                            .cols = starts_with("u.VOR"))) %>% 
+  bind_cols()
+
+```
+
+### MLE/EM estimator
+
+```{r MLE-estimator}
+
+MLE.names.est <- paste0("u.MLE_", prob.est.input.names)
+
+MLE.est <- pmap(prob.est.input.list,
+                 ~EM_est_supertiles(area = area,
+                                    c.vec.dt = ..1, 
+                                    P.dt = ..2, 
+                                    prior.var = ..3,
+                                    selected.range = c(1, 10, 50, 200),
+                                    n.iter = n.iter.MLE,
+                                    message = T, 
+                                    ldt.dt = 0)) %>% 
+  map(~arrange(., tile.id.num)) %>% 
+  map_at(c(1), ~dplyr::select(., tile.id.num, starts_with("u_"))) %>% 
+  map_at(-c(1), ~dplyr::select(., starts_with("u_"))) %>% 
+  map2(., MLE.names.est, ~rename_with(.x, 
+                                             stringr::str_replace, 
+                                             pattern = "u", replacement = .y, 
+                                             .cols = starts_with("u"))) %>% 
+  bind_cols()
+```
+
+### DF estimator
+
+```{r DF-estimator}
+DF.names.est <- paste0("u.DF_", prob.est.input.names)
+## Renormalizing with EM and bringing estimate on regular tile.id level
+DF.est <- pmap(prob.est.input.list,
+                ~DF_est_relaxed_iter_supertiles(area = area,
+                                                c.vec.dt = ..1, 
+                                                P.dt = ..2, 
+                                                prior.var = ..3,
+                                                selected.range = c(1, 10, 50, 200),
+                                                n.iter = n.iter.MLE,
+                                                message = T, 
+                                                ldt.dt = 0)) %>% 
+  map(~arrange(., tile.id.num)) %>% 
+  map_at(c(1), ~dplyr::select(., tile.id.num, starts_with("u_"))) %>% 
+  map_at(-c(1), ~dplyr::select(., starts_with("u_"))) %>% 
+                   map2(., DF.names.est, ~rename_with(.x, 
+                                      stringr::str_replace, 
+                                      pattern = "u", replacement = .y, 
+                                      .cols = starts_with("u"))) %>% 
+  bind_cols()
+```
+
+```{r estimation-combine}
+### Evaluation
+final.estimates.sf <- area$area.sf %>% 
+  left_join(VOR.tower.est, by = "tile.id.chr") %>%
+  left_join(VOR.offset.est, by = "tile.id.chr") %>%
+  left_join(VOR.barycenter.est, by = "tile.id.chr") %>%
+  left_join(MLE.est, by = "tile.id.num") %>%
+  left_join(DF.est, by = "tile.id.num") %>%
+  arrange(tile.id.num)
+  # group_by(prior.2) %>%
+  # mutate(u.grouped.flat = mean(pop)) %>%
+  # ungroup() %>%
+  # mutate(u.flat = mean(pop))
+
+saveRDS(final.estimates.sf, "workflow_objects/final.estimates.sf.rds")
+
+
+# non-sf version
+final.estimates.df <- final.estimates.sf %>% 
+  st_drop_geometry()
+
+# vector with names of the relevant estimates
+names.final.estimates <- final.estimates.sf %>% 
+  dplyr::select(pop, starts_with("u.")) %>% # all estimates
+  # dplyr::select(pop, matches(as.character(n.iter.MLE)), matches("VOR")) %>% # only "final" ones for mapping
+  st_drop_geometry() %>% 
+  names()
+```
+
+## Evaluation
+
+### Spatial Density
+
+```{r estimation-maps}
+# Define break points for discretized spatial density plots
+breaks <- c(0, 2, 5, 10, 20, 50, 100, 200, 350, Inf)
+maps.input <- final.estimates.sf %>% 
+  dplyr::select(tile.id, pop, X.centroid, Y.centroid, all_of(names.final.estimates)) %>% 
+  mutate(across(c(pop, starts_with("u.")), ~cut(., breaks = breaks, dig.lab = 7, right = F)))
+
+# Build maps and print
+(maps.estimation.density <- names.final.estimates %>%
+    map(~map_density(data = maps.input, var = .x, label = .x)) %>%
+    set_names(names.final.estimates))
+
+# saving maps
+# walk2(maps.estimation.density, names(maps.estimation.density),
+#       ~ggsave(filename = paste0(.y, ".png"), plot = .x,
+#               path = paste0(getwd(), "/Poster/"), device = "png"))
+
+
+```
+
+### KWD all estimators
+
+```{r kwd-computation}
+# develop dataframe with GTP, all final estimates and tile centroids
+kwd.helper.est <- final.estimates.sf %>% 
+  dplyr::select(tile.id.num, pop, all_of(names.final.estimates)) %>%
+  # dplyr::select(-c(elevation, type), -matches("prior")) %>%
+  st_centroid() %>% 
+  mutate(lon = unlist(map(.$geometry, 1)),
+         lat = unlist(map(.$geometry, 2))) %>% 
+  st_drop_geometry()
+
+# Coordinates object
+coordinates <- kwd.helper.est %>% 
+  dplyr::select(lon, lat) %>% 
+  as.matrix()
+
+# Weights object
+weights <- kwd.helper.est %>% 
+  # dplyr::select(pop, matches("200")) %>%
+  dplyr::select(pop, starts_with("u.")) %>%
+  as.matrix()
+
+
+# Approximation parameter (the higher the more accurate)
+L = 3
+
+# Run KWD
+kwd.final <- compareOneToMany(coordinates, weights, L = L, recode = TRUE)
+paste("KWD runtime ( L =", L, "):", round(kwd.final$runtime / 60, 0), "min for", 
+      ncol(weights) - 1, "estimates and", 
+      length(final.estimates.df$tile.id), "tiles")
+
+# Define names for estimators
+names.weights <- colnames(weights)[-1]
+
+order.mismatch <- str_replace(mismatch.versions, paste0(names(gen.model.objects$C.vec.df.list), "."), "")
+
+
+# Develop data frame on the estimtor level with respective KWD values
+kwd.eval.caro <- tibble(estimator = names.weights,
+                   kwd = kwd.final$distance * 1) %>%  # rescaling according to scale
+  mutate(kwd.lower.bound = kwd - ((kwd / 100) * 1.29)) %>%  # for L=3 within 1 percent 
+  mutate(network.kind = str_extract(estimator, pattern = paste0(names(gen.model.objects$C.vec.df.list), collapse = "|"))) %>% 
+  mutate(iteration = str_extract(estimator, "[[:digit:]]+$")) %>% 
+  mutate(version = case_when(str_detect(estimator, "true") ~ "true",
+                             TRUE ~ str_extract(estimator, 
+                                                pattern = paste(c(order.mismatch, "flat"), collapse = "|")))) %>% 
+  # kind = substr(estimator, 1, 11)) %>%
+  mutate(iteration = case_when(is.na(iteration) ~ 0,
+                               TRUE ~ as.numeric(iteration))) %>% 
+  mutate(estimator.kind = str_extract(estimator, pattern = "MLE|DF|flat")) %>% 
+  group_by(version, estimator.kind) %>% 
+  mutate(final.iteration = case_when(iteration == max(iteration) ~ T,
+                                     T ~ F)) %>% 
+  mutate(min.KWD = case_when(kwd == min(kwd) ~ T,
+                             T ~ F)) %>% 
+  ungroup()  %>% 
+  mutate(version.kind = case_when(str_detect(version, "no") ~ "Noise",
+                                  str_detect(version, "quant") ~ "Quantization",
+                                  str_detect(version, "true") ~ "True",
+                                  is.na(version) ~ "True")) %>% 
+    mutate(prior.version = case_when(str_detect(estimator, "prior.1") ~ "Uninformative",
+                                   str_detect(estimator, "prior.2") ~ "Mildly informative")) %>% 
+  mutate(estimator.name = case_when_estimator(estimator, iteration)) %>% 
+  group_by(version, estimator.name) %>% 
+  mutate(final.iteration = case_when(iteration == max(iteration) ~ T,
+                                     T ~ F)) %>% 
+  mutate(min.KWD = case_when(kwd == min(kwd) ~ T,
+                             T ~ F)) %>% 
+  ungroup()
+
+saveRDS(kwd.eval, "workflow_objects/kwd.eval.rds")
+kwd.eval.caro <- readRDS("results/kwd.eval.rds")
+order.mismatch <- readRDS("results/results/order.mismatch.caro.rds")
+
+case_when_estimator <- function(estimator, iteration) {
+  case_when(
+    str_detect(estimator, "u.VOR.tower") ~ "VOR.t",
+    str_detect(estimator, "u.VOR.offset") ~ "VOR.o",
+    str_detect(estimator, "u.VOR.barycenter") ~ "VOR.b",
+    str_detect(estimator, "u.MLE") & iteration == 1 ~ "SB",
+    str_detect(estimator, "u.MLE") & iteration == 10 ~ "MLE10",
+    str_detect(estimator, "u.MLE") ~ "MLE200",
+    str_detect(estimator, "u.DF") & iteration == 1 ~ "DF1",
+    str_detect(estimator, "u.DF") & iteration == 10 ~ "DF10",
+    str_detect(estimator, "u.DF") ~ "DF200",
+    str_detect(estimator, "u.grouped.flat") ~ "Grouped.flat",
+    str_detect(estimator, "u.flat") ~ "flat",
+    
+  )
+}
+
+
+kwd.eval <- kwd.eval.caro %>% 
+  mutate(version.kind = case_when(str_detect(version, "no") ~ "Noise",
+                                  str_detect(version, "quant") ~ "Quantization",
+                                  str_detect(version, "true") ~ "True",
+                                  is.na(version) ~ "True")) %>% 
+  mutate(prior.version = case_when(str_detect(estimator, "prior.1") ~ "Uninformative",
+                                   str_detect(estimator, "prior.2") ~ "Mildly informative")) %>% 
+  mutate(estimator.name = case_when_estimator(estimator, iteration)) %>% 
+  group_by(version, estimator.name) %>% 
+  mutate(final.iteration = case_when(iteration == max(iteration) ~ T,
+                                     T ~ F)) %>% 
+  mutate(min.KWD = case_when(kwd == min(kwd) ~ T,
+                             T ~ F)) %>% 
+  ungroup()
+```
+
+### KWD for estimates with no model mismatch
+
+```{r kwd_1}
+
+difference <- kwd.eval %>% 
+  filter(str_detect(estimator, "VOR|flat") | final.iteration == T) %>%
+  filter(version.kind == "True") %>%
+  mutate(estimator.name.ordered = reorder(estimator.name, -kwd)) %>%
+  group_by(network.kind, estimator.name.ordered) %>% 
+  summarise(diff.per = ((max(kwd) - min(kwd)) / max(kwd)) * -100,
+            y.axis.brace = max(kwd) + 1.4,
+            y.axis.dif = max(kwd) + 1.7)
+  
+  
+
+(kwd.final.estimates.plot <- kwd.eval %>% 
+    filter(str_detect(estimator, "VOR|flat") | final.iteration == T) %>%
+    filter(version.kind == "True") %>% 
+    mutate(estimator.name.ordered = reorder(estimator.name, -kwd)) %>%
+    ggplot(aes(x = estimator.name.ordered, y = kwd)) + 
+    geom_bar(aes(fill = prior.version), 
+             stat = "identity", position = position_dodge(width = 0.9)) + 
+    geom_errorbar(aes(ymin = kwd.lower.bound, ymax = kwd, fill = prior.version), 
+                  position = position_dodge(width = 0.9), width = 0.25) +
+    geom_text(aes(label = round(kwd, 2), fill = prior.version), 
+              position = position_dodge(1), hjust = -0.1, color = "Black", size = 3) +
+    geom_text(data = difference, aes(x = estimator.name.ordered, y = y.axis.brace, 
+                                     label = paste("}")),
+              position = position_dodge(1), hjust = 0, color = "Blue", size = 4) +
+    geom_text(data = difference, aes(x = estimator.name.ordered, y = y.axis.dif, 
+                                     label = paste(round(diff.per, 2), "%")),
+              position = position_dodge(0.5), hjust = -0.1, color = "Blue", size = 4) +
+    scale_fill_ptol() +
+    ylim(0, 15) +
+    facet_wrap(vars(network.kind)) +
+    theme_bw() +
+    coord_flip() +
+    labs(title = "KWD for estimates with no model mismatch",
+         x = "", y = "KWD", 
+         alpha = "Iteration", fill = "Prior") + 
+    theme(legend.position = "bottom"))
+
+ggsave("kwd.evaluation.with.informative.prior.png", kwd.final.estimates.plot, dev = "png")
+```
+
+### KWD after `r n.iter.MLE` iterations
+
+```{r kwd-noise}
+order.noise.levels <- c(str_subset(order.mismatch, "true"), 
+                        str_subset(order.mismatch, "true|quant", negate = T)) %>%
+  str_replace(., "no.true", "true")  %>% 
+  unique(.)
+
+order.quant.levels <- c(str_subset(order.mismatch, "true"),
+                        rev(str_subset(order.mismatch, "no.|true", negate = T))) %>% 
+  str_replace(., "no.true", "true")  %>% 
+  unique(.)
+
+mismatch.helper <- c(order.noise.levels, order.quant.levels[-1])
+
+kwd.vor.helper <- kwd.eval %>% 
+  mutate(estimator.name = case_when_estimator(estimator, iteration)) %>% 
+  filter(str_detect(estimator.name, "VOR")) %>% 
+  mutate(time = case_when(str_detect(estimator.name, "VOR") ~ 15,
+                          TRUE ~ 1)) %>% 
+  uncount(time) %>% 
+  mutate(version = rep(mismatch.helper, 24))
+  
+  
+(kwd.noise.plot <- kwd.eval %>% 
+    filter(estimator.name == "SB" | iteration == 10) %>% 
+    filter(version.kind %in% c("Noise", "True")) %>% 
+    bind_rows(filter(kwd.vor.helper, str_detect(version, "no.|true"))) %>% 
+    mutate(estimator.name.ordered = reorder(estimator.name, kwd)) %>%
+    mutate(version.ordered = factor(version, levels = order.noise.levels)) %>%
+    ggplot(aes(x = version.ordered, y = kwd, color = estimator.name.ordered, group = estimator.name.ordered)) +
+    geom_line(size = 1) +
+    geom_point() +
+    geom_ribbon(aes(ymin = kwd.lower.bound, ymax = kwd, group = version), 
+                alpha = 0.2, color = "transparent") +
+    # geom_text_repel(aes(label = round(kwd, 2)), size = 7, show.legend  = F) +
+    colorspace::scale_fill_discrete_qualitative(palette = "Harmonic") +
+    facet_wrap(vars(network.kind, prior.version), scales = "free_x", ncol = 4) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+          legend.position = "bottom") +
+    labs(x = "Version",
+         y = "KWD", color = "Estimator",
+         title = "KWD estimates random noise model mismatch (after 10 iterations)"))
+
+ggsave("kwd.noise.plot.10.png", kwd.noise.plot, dev = "png")
+  
+
+
+(kwd.quant.plot <- kwd.eval %>% 
+    filter(estimator.name == "SB" | iteration == 1) %>% 
+    filter(version.kind %in% c("Quantization", "True")) %>% 
+    bind_rows(filter(kwd.vor.helper, str_detect(version, "quant.|true"))) %>% 
+    mutate(estimator.name.ordered = reorder(estimator.name, kwd)) %>%
+    mutate(version.ordered = factor(version, levels = order.quant.levels)) %>%
+    ggplot(aes(x = version.ordered, y = kwd, color = estimator.name.ordered, group = estimator.name.ordered)) +
+    geom_line(size = 1) +
+    geom_point() +
+    geom_ribbon(aes(ymin = kwd.lower.bound, ymax = kwd, group = version), 
+                alpha = 0.2, color = "transparent") +
+    # geom_text_repel(aes(label = round(kwd, 2)), size = 7, show.legend  = F) +
+    colorspace::scale_fill_discrete_qualitative(palette = "Harmonic") +
+    facet_wrap(vars(network.kind, prior.version), scales = "free_x", ncol = 4) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+          legend.position = "bottom") +
+    labs(x = "Version",
+         y = "KWD", color = "Estimator",
+         title = "KWD estimates quantization model mismatch (after 10 iterations)"))
+
+ggsave("kwd.quant.plot.10.png", kwd.quant.plot, dev = "png")
+```
+
+### KWD convergence for numerical estimators
+
+```{r kwd-convergence, warning=FALSE}
+# log scale breaks for background grid
+minor.breaks <- rep(1:9, 21) * (10^rep(-10:10, each = 9))
+
+# develop line plot
+(kwd.convergence.noise.plot <- kwd.eval %>% 
+    # filter(str_detect(estimator, "prior.1")) %>%
+    filter(!estimator.kind == "flat") %>% 
+    filter(version.kind %in% c("Noise", "True")) %>% 
+    mutate(version.ordered = factor(version, levels = order.noise.levels)) %>%
+    ggplot(aes(x = iteration, y = kwd, color = version.ordered)) +
+    geom_line() +
+    geom_point(show.legend = F) +
+        # geom_text_repel(aes(label = round(kwd, 2)), size = 3, show.legend  = F) +
+    facet_wrap(vars(network.kind, estimator.kind, prior.version), nrow = 2) +
+    geom_ribbon(aes(ymin = kwd.lower.bound, ymax = kwd, group = version.ordered), 
+                alpha = 0.2, color = "transparent") +
+    scale_color_ptol() +
+    scale_x_log10(labels = scales::trans_format("log10", scales::math_format(10^.x)),
+                  minor_breaks = minor.breaks) +
+    annotation_logticks(sides = "b") +
+    labs(color = "Random Noise",
+         x = "Iteration",
+         y = "KWD",
+         title = "Random Noise: KWD convergence behavior per estimator"))
+
+ggsave("kwd.convergence.noise.plot.png", kwd.convergence.noise.plot, dev = "png",
+       width = 10)
+
+(kwd.convergence.quant.plot <- kwd.eval %>% 
+    # filter(str_detect(estimator, "prior.1")) %>%
+    filter(!estimator.kind == "flat") %>% 
+    filter(version.kind %in% c("Quantization", "True")) %>% 
+    mutate(version.ordered = factor(version, levels = order.quant.levels)) %>%
+    ggplot(aes(x = iteration, y = kwd, color = version.ordered)) +
+    geom_line() +
+    geom_point(show.legend = F) +
+        # geom_text_repel(aes(label = round(kwd, 2)), size = 3, show.legend  = F) +
+    facet_wrap(vars(network.kind, estimator.kind, prior.version), nrow = 2) +
+    geom_ribbon(aes(ymin = kwd.lower.bound, ymax = kwd, group = version.ordered), 
+                alpha = 0.2, color = "transparent") +
+    scale_color_ptol() +
+    scale_x_log10(labels = scales::trans_format("log10", scales::math_format(10^.x)),
+                  minor_breaks = minor.breaks) +
+    annotation_logticks(sides = "b") +
+    labs(color = "Quantization",
+         x = "Iteration",
+         y = "KWD",
+         title = "Quantization: KWD convergence behavior per estimator"))
+
+ggsave("kwd.convergence.quant.plot.png", kwd.convergence.quant.plot, dev = "png",
+       width = 10)
+
+```
+
+
+
+
+```{r}
+sessionInfo()
+```
+
+

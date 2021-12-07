@@ -555,3 +555,9 @@ gen.model.objects <- list(C.vec.df.list = C.vec.df.list,
 # saveRDS(gen.model.objects, "workflow_objects/gen.model.objectss.rds")
 
 ```
+
+
+```{r}
+sessionInfo()
+```
+
