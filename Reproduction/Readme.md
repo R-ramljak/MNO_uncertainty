@@ -10,7 +10,7 @@ This study follows the logics of the MNO-simulator workflow, see the figure belo
 
 -   `Munich_generate.R`: Processes the raw census data to make it manageable for the the three modules.
 
--   `Generation of network scenarios.Rmd`: Generates the mobile phone population and the four network scenarios, as well as performs the phone-to-cell association task (module: Generation). This notebook is also the basis for the supplementary material, which can be found [here](.)
+-   `Generation of network scenarios.Rmd`: Generates the mobile phone population and the four network scenarios, as well as performs the phone-to-cell association task (module: Generation). This notebook is also the basis for the supplementary material, which can be found [here](https://r-ramljak.github.io/MNO_uncertainty/).
 
 -   `Model_mismatch.Rmd`: Here we develop all necessary estimation models and run the different deterministic and probabilistic estimators (module: Estimation). Furthermore, we evaluate the results by means of KWD and create the final result plots (module: Evaluation).
 
@@ -46,7 +46,7 @@ Depending on the fact if you use the RStudio project file, file path adjustment 
 
 -   If RStudio is available, open the [MNO_uncertainty.Rproj](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/MNO_uncertainty.Rproj) file for easier path management.
 
--   Depending on which results you want to reproduce or which other code blocks you want to experiment with, you can follow this [file](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Data/interim%20objects%20list.txt). It describes, which `*.rds` object contains which information and where it is loaded into one of the two main notebooks, according to *Partial reproduction #'s*. These need to be handled in a continous dependent fashion, meaning if you want to reproduce everything from number 7 onwards you need load in the pervious numbers as well. Also, sometimes some intermediary objects that are created between *Partial reproduction #'s* need to be created by running the code.
+-   Depending on which results you want to reproduce or which other code blocks you want to experiment with, you can follow this [file](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Data/interim%20objects%20list.txt). It describes, which `*.rds` object contains which information and where it is loaded into one of the two main notebooks, according to *Partial reproduction \#'s*. These need to be handled in a continous dependent fashion, meaning if you want to reproduce everything from number 7 onwards you need load in the pervious numbers as well. Also, sometimes some intermediary objects that are created between *Partial reproduction \#'s* need to be created by running the code.
 
 ## License
 
