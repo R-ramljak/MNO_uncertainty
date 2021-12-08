@@ -1,5 +1,6 @@
 ---
-title: "Model mismatch"
+title: "MNO_uncertainty: Introduction of model mismatch"
+author: "Marco Ramljak"
 date: "`r Sys.Date()`"
 output:
   bookdown::html_document2:
@@ -11,6 +12,28 @@ output:
     number_sections: true
     fig_caption: yes
 ---
+
+This notebook focuses on the second two modules, Estimation and Evaluation. The general structure is the following:
+
+-   General Setup
+
+-   Construct mismatched emission probabilities
+
+    -   Spatially sensitive random noise
+
+    -   Quantization
+
+-   Estimation
+
+    -   Deterministic estimators
+
+    -   Probabilistic estimators
+
+-   Evaluation
+
+# General Setup: Loading Packages and Custom Functions
+
+First, we load the following dependencies and the custom functions of the MNO-simulator workflow, `pipeline functions.R`.
 
 ```{r setup, message=FALSE}
 # Data manipulation
@@ -51,18 +74,20 @@ set.seed(42)
 # Loading Custom functions
 source("pipeline functions.R")
 
-# Load toyworld objects 
-area <- readRDS("workflow_objects/area.rds")
-cellplans.list <- readRDS("workflow_objects/cellplans.list.rds")
-gen.model.objects <- readRDS("workflow_objects/gen.model.objects.rds")
+# Load generation objects 
+area <- readRDS("Data/Generation/area.rds")
+cellplans.list <- readRDS("Data/Generation/cellplans.list.rds")
+gen.model.objects <- readRDS("Data/Generation/gen.model.objects.rds")
 ```
 
 ## Model mismatch techniques
 
 ### Random noise implementation
 
+Here, we introduce spatially sensitive random noise into each cell footprint (tile-cell relationships, generative model) of a network scenario. The noise is sampled from a uniform distribution with tunable parameters (`noise.expression`) and added to the signal strength (dBm) values of the respective cell footprint. To make it spatially sensitive we consider a lower minimum signal dominance threshold (0.01 instead of 0.05) to avoid unrealistic distortion of the resulting footprint. After the noise is added, we compute, as usual, the signal dominance values, discard the tile-cell relationships that fall below the 0.05 threshold, compute the emission probabilities and store them in `P.long.noise.df.` Via `purrr::map()`, we automatize this task for each network scenario and each noise specifcation.
+
 ```{r noise-implementation}
-# define the number of bits --> final number of levels are 2^n
+# define the amount of noise, which is sampled from a uniform distribution
 noise.expression <- c(no.03 = "runif(min = -3, max = 3",
                       no.06 = "runif(min = -6, max = 6",
                       no.09 = "runif(min = -9, max = 9",
@@ -123,10 +148,12 @@ P.long.noise.df <- P.long.noise.complete.df %>%
   map(~filter(., !s.mismatch.mag < 0.05)) %>% # define minimum threshold 
   map(~mutate(., pij = con_llh_sens_custom(., "s.mismatch.mag", digits = 3)))
 
+# Partial reproduction 4
 # saveRDS(P.long.noise.df, "workflow_objects/P.long.noise.df.rds")  
-P.long.noise.df <- readRDS("results/P.long.noise.df.rds")
+# P.long.noise.df <- readRDS("Data/Estimation/P.long.noise.df.rds")
 ```
 
+Visualizing the impact of noise on the cell footprints on the dBm scale for the third network scenario.
 
 ```{r}
 # noise on the dBm scale
@@ -134,17 +161,19 @@ order.levels.noise <- c(noise.expression.only.true, noise.expression.wo.true)
 dense.names.noise <- names(P.long.noise.df) %>% 
   str_subset("cellplan.3") 
 
+
+## only accessible with P.long.noise.complete.df
 (dBm.plot.ME <- P.long.noise.complete.df %>%
   magrittr::extract(dense.names.noise) %>% 
   map_dfr(~dplyr::select(., cell, cell.kind, tile.id.num, noise.mag, noise.level)) %>% 
-  filter(cell == ("ME.123.C.2")) %>% 
+  filter(cell == ("ME.123.C.2")) %>% # exemplary cell
   mutate(noise.level = factor(noise.level, levels = order.levels.noise)) %>% 
   left_join(area$area.sf, by = "tile.id.num") %>% 
   st_as_sf() %>% 
   ggplot() +
   geom_sf(aes(fill = noise.mag), color = "transparent") +
   scale_fill_viridis(na.value = "transparent") +
-  facet_wrap(vars(noise.level), ncol = 3) +
+  facet_wrap(vars(noise.level), ncol = 4) +
   coord_sf() +
   labs(title = "Meso noise on the dBm scale without minimum threshold", 
        color = "dBm", fill = "dBm", x = "", y = "") +
@@ -153,21 +182,17 @@ dense.names.noise <- names(P.long.noise.df) %>%
         axis.ticks.x = element_blank(),
         axis.ticks.y = element_blank(),
         legend.position = "bottom"))
-# ggsave("workflow_objects/noise.dBm.plot.ME.png", dBm.plot.ME, device = "png")
 ```
+
+Visualizing the impact of noise on the cell footprints on the signal dominance scale for the third network scenario. This figure is published as Figure 5 in the thesis.
 
 ```{r}
 # noise on the signal dominance scale
-
-# paper.filter.noise <- order.levels.noise %>% 
-#   str_subset(pattern = "03|06|12|18|21")
-
 (dom.plot.ME.noise <- P.long.noise.df %>% 
     magrittr::extract(dense.names.noise) %>% 
     map_dfr(~dplyr::select(., cell, cell.kind, tile.id.num, s.mismatch.mag, noise.level)) %>% 
-    filter(cell == ("ME.100.C.2")) %>% 
+    filter(cell == ("ME.100.C.2")) %>% # exemplary cell
     mutate(noise.level = factor(noise.level, levels = order.levels.noise)) %>% 
-    # filter(noise.level %in% paper.filter.noise) %>% 
     left_join(area$area.sf, by = "tile.id.num") %>% 
     st_as_sf() %>% 
     ggplot() +
@@ -186,16 +211,15 @@ dense.names.noise <- names(P.long.noise.df) %>%
           axis.ticks.y = element_blank(),
           legend.position = "bottom",
           rect = element_rect(fill = "transparent")))
-ggsave("workflow_objects/noise.dom.plot.ME.w.th.png", dom.plot.ME.noise, device = "png", bg = "transparent",
-       height = 5)
-# ggsave("Final Plots/noise.dom.plot.ME.eps", dom.plot.ME, device = "eps")
+# ggsave("Final Plots/footprint.noise.png", dom.plot.ME.noise, device = "png", bg = "transparent", height = 5)
 ```
 
 ### Quantization
 
+Here, we quantize each cell footprint (tile-cell relationships, generative model) of a network scenario. The amount of quantization is defined in `quant.levels` and describes the resulting number of equally sized categories the respective cell footprint is discretized to. In contrast to the mismatch technique from above, we quantize the signal dominance values and not the signal strength values as otherwise the categories would not be equally sized anymore after the signal dominance transformation. After the quantization, we discard the tile-cell relationships that fall below the minimum dominance threshold and we compute the emission probabilities and store them in `P.long.quant.df.`
+
 ```{r}
 # define the number of bits --> final number of levels are 2^n + 1
-
 quant.levels <- c(
   quant.00 = 0,
   quant.01 = 1,
@@ -241,10 +265,12 @@ P.long.quant.df <- P.long.quant.complete.df %>%
   map(~filter(., !quant.mag < 0.05)) %>% # define minimum threshold 
   map(~mutate(., pij = con_llh_sens_custom(., "quant.mag", digits = 3))) 
 
+# Partial reproduction 5
 # saveRDS(P.long.quant.df, "workflow_objects/P.long.quant.df.rds")  
-P.long.quant.df <- readRDS("results/P.long.quant.df.rds")
-
+# P.long.quant.df <- readRDS("Data/Estimation/P.long.quant.df.rds")
 ```
+
+Visualizing the impact of quantization on the cell footprints on the dominance scale without considering the minimum threshold for the third network scenario.
 
 ```{r}
 # quantization on the dominance scale without threshold
@@ -252,10 +278,11 @@ order.levels.quant <- c(quant.levels.only.true, rev(quant.levels.wo.true))
 dense.names.quant <- names(P.long.quant.df) %>% 
   str_subset("cellplan.3") 
 
+## only accessible with P.long.quant.complete.df
 (dom.plot.ME <- P.long.quant.complete.df %>% 
     magrittr::extract(dense.names.quant) %>% 
     map_dfr(~dplyr::select(., cell, cell.kind, tile.id.num, quant.mag, quant.level)) %>% 
-    filter(cell == ("ME.100.C.2")) %>% 
+    filter(cell == ("ME.100.C.2")) %>% # exemplary cell
     mutate(quant.level = factor(quant.level, levels = order.levels.quant)) %>% 
     left_join(area$area.sf, by = "tile.id.num") %>% 
     st_as_sf() %>% 
@@ -271,21 +298,18 @@ dense.names.quant <- names(P.long.quant.df) %>%
           axis.ticks.x = element_blank(),
           axis.ticks.y = element_blank(),
           legend.position = "bottom"))
-# ggsave("workflow_objects/quant.dom.plot.ME.wo.th.png", dom.plot.ME, device = "png")
 ```
+
+Visualizing the impact of quantization on the cell footprints on the signal dominance scale with considering the minimum threshold for the third network scenario. This figure is published as Figure 6 in the thesis.
 
 ```{r}
 # quantization on the dominance scale with threshold
 
-# paper.filter.quant <- order.levels.quant %>% 
-#   str_subset(pattern = "10|04|03|01|00")
-
 (dom.plot.ME.th.quant <- P.long.quant.df %>% 
     magrittr::extract(dense.names.quant) %>% 
     map_dfr(~dplyr::select(., cell, cell.kind, tile.id.num, quant.mag, quant.level)) %>% 
-    filter(cell == ("ME.100.C.2")) %>%
+    filter(cell == ("ME.100.C.2")) %>% # exemplary cell
     mutate(quant.level = factor(quant.level, levels = order.levels.quant)) %>% 
-    # filter(quant.level %in% paper.filter.quant) %>% 
     left_join(area$area.sf, by = "tile.id.num") %>% 
     st_as_sf() %>% 
     ggplot() +
@@ -304,10 +328,10 @@ dense.names.quant <- names(P.long.quant.df) %>%
           axis.ticks.y = element_blank(),
           legend.position = "bottom",
           rect = element_rect(fill = "transparent")))
-ggsave("workflow_objects/quant.dom.plot.ME.w.th.png", dom.plot.ME.th.quant, device = "png", bg = "transparent",
-       height = 5)
-# ggsave("Final Plots/quant.dom.plot.ME.w.th.eps", dom.plot.ME.th, device = "eps")
+# ggsave("Final Plots/footprint.quant.png", dom.plot.ME.th.quant, device = "png", bg = "transparent", height = 5)
 ```
+
+The following plot visualizes the theoretical translation of the true signal dominance value range to the final quantized signal dominance value.
 
 ```{r}
 cell.kind.unique <- n_distinct(cellplans.list$cellplan.1$param.df$cell.kind)
@@ -340,9 +364,7 @@ new.df.theo.vars <- quant.levels %>%
 
 (theo.quant.plot.new <- new.df.theo.vars %>%
     mutate(quant.level = factor(quant.level, levels = order.levels.quant)) %>% 
-  # filter(!quant.level %in% c("quant.04", "quant.05")) %>%
   ggplot() +
-  # geom_point(aes(x = s, y = quant.mag, color = quant.level, group = quant.level))
   geom_line(aes(x = s, y = quant.mag,
                 color = quant.level),
             size = 1) +
@@ -352,28 +374,37 @@ new.df.theo.vars <- quant.levels %>%
        color = "Quant. Version") +
   theme_bw() +
   theme(legend.position = "bottom"))
-ggsave("workflow_objects/theo.quant.plot.new.png", theo.quant.plot.new, device = "png")
 ```
 
-## Estimation 
+## Estimation
+
+In the previous section we developed our model objects for the P-matrix input parameter. Both `P.long.quant.df` and `P.long.noise.df` contain the mismatched emission probabilities. We can now prepare the remaining estimation parameters (the mildly and non-informative prior information vectors and the c-vectors) as well as other necessary specification parameters (e.g. number of iterations. We do this for each kind of estimation strategy (probabilistic and deterministic). After the preparation, we can input them into each respective estimator and finally save the final estimation.
 
 ### Preparing the parameter lists
 
 #### Probabilistic Estimators
 
+Here, we define all necessary parameters for the probabilistic estimators and save them in `prob.est.input.list`. The two priors were created for convenience reasons in the previous notebook as they are saved within the `area` object. Consolidation (supertiles) is performed within the specific probabilistic estimator function.
+
 ```{r estimation-input-parameters}
+
+# saving all models (mismatched and generative) into a list object
 P.long.mismatch.complete <- c(P.long.noise.df, P.long.quant.df) %>%
   discard(str_detect(names(.), "quant.true")) 
+
 mismatch.versions <- names(P.long.mismatch.complete)
+
+# Partial reproduction 6
+# saveRDS(mismatch.versions, "Data/Estimation/mismatch.versions.rds")
+# mismatch.versions <- readRDS("Data/Estimation/mismatch.versions.rds")
 
 P.long.names <- c(names(noise.expression), names(quant.levels)) %>% 
   str_subset("quant.true", negate = T)
 
 
-# Each toyworld produces a separate c.vector, however it stays consistent within each toyworld.
+# Each network scenario produces a separate c.vector, however it stays consistent within each network scenario
 
-
-### C vector, adding antennas that have 0 phones to complete the vector, arranging it according to the antenna.ID and saving as vector
+### C vector, adding cells that have 0 phones to complete the vector, arranging it according to the cell.ID and saving as vector
 c.vec <- gen.model.objects$P.long.complete.df %>%
   map(~distinct(., cell.num, phones.sum)) %>%
   map2(., cellplans.list, ~right_join(.x, .y$cellplan.combined.df, by = "cell.num")) %>%
@@ -421,13 +452,18 @@ prob.est.input.list <- list(c = c.vec.parameter.list,
                             a = prior.parameter.list) %>% 
   map(~set_names(., prob.est.input.names)) ### is this the correct order (qm))))
 
+# Partial reproduction 7
+# saveRDS(prob.est.input.list, "Data/Estimation/prob.est.input.list.rds")
+# prob.est.input.list <- readRDS("Data/Estimation/prob.est.input.list.rds")
+
 
 # number of iterations
 n.iter.MLE = 200
 ```
 
+#### Deterministic Parameters
 
-#### Determnistic Parameters
+Here, we define all necessary parameters for the deterministic estimators and save them in `VOR.input.list`.
 
 ```{r estimation-input-parameters}
 
@@ -465,12 +501,15 @@ VOR.input.list <- list(cellplan.combined = cellplan.combined.parameter.list,
                        C.vec.df = C.vec.df.parameter.list,
                        prior.var = prior.var.parameter.list) %>% 
   map(~set_names(., det.est.input.names))
+
+# Partial reproduction 8
+# saveRDS(VOR.input.list, "Data/Estimation/VOR.input.list.rds")
+VOR.input.list <- readRDS("Data/Estimation/VOR.input.list.rds")
 ```
 
-
-
-
 ### Voronoi estimators
+
+Here, we run each Voronoi estimator for all possible versions. If interested, the objects `VOR.tower`, `VOR.offset` and `VOR.barycenter` contain also the respective Voronoi map.
 
 ```{r VOR.tower, warning=FALSE, echo=FALSE, out.width="50%"}
 # Voronoi estimation with tower locations as seeds
@@ -539,6 +578,8 @@ VOR.barycenter.est <- VOR.barycenter %>%
 
 ### MLE/EM estimator
 
+Here, we run the probabilistic MLE/EM estimator for all possible versions. Note, the result of the first iteration constitutes the SB estimator.
+
 ```{r MLE-estimator}
 
 MLE.names.est <- paste0("u.MLE_", prob.est.input.names)
@@ -564,6 +605,8 @@ MLE.est <- pmap(prob.est.input.list,
 
 ### DF estimator
 
+Here, we run the probabilistic approximated DF estimator for all possible versions.
+
 ```{r DF-estimator}
 DF.names.est <- paste0("u.DF_", prob.est.input.names)
 ## Renormalizing with EM and bringing estimate on regular tile.id level
@@ -587,7 +630,7 @@ DF.est <- pmap(prob.est.input.list,
 ```
 
 ```{r estimation-combine}
-### Evaluation
+# combine all estimation vectors together with the original GTP values and geographic info
 final.estimates.sf <- area$area.sf %>% 
   left_join(VOR.tower.est, by = "tile.id.chr") %>%
   left_join(VOR.offset.est, by = "tile.id.chr") %>%
@@ -595,12 +638,11 @@ final.estimates.sf <- area$area.sf %>%
   left_join(MLE.est, by = "tile.id.num") %>%
   left_join(DF.est, by = "tile.id.num") %>%
   arrange(tile.id.num)
-  # group_by(prior.2) %>%
-  # mutate(u.grouped.flat = mean(pop)) %>%
-  # ungroup() %>%
-  # mutate(u.flat = mean(pop))
 
-saveRDS(final.estimates.sf, "workflow_objects/final.estimates.sf.rds")
+
+# partial reproduction 9
+# saveRDS(final.estimates.sf, "Estimation/final.estimates.sf.rds")
+final.estimates.sf <- readRDS("Data/Estimation/final.estimates.sf.rds")
 
 
 # non-sf version
@@ -610,14 +652,19 @@ final.estimates.df <- final.estimates.sf %>%
 # vector with names of the relevant estimates
 names.final.estimates <- final.estimates.sf %>% 
   dplyr::select(pop, starts_with("u.")) %>% # all estimates
-  # dplyr::select(pop, matches(as.character(n.iter.MLE)), matches("VOR")) %>% # only "final" ones for mapping
   st_drop_geometry() %>% 
   names()
 ```
 
+We have created now a final `sf-dataframe` that contains the GTP info, the geographic info and the estimated value of mobile phones for each estimator respectively for each tile, `final.estimates.sf`.
+
 ## Evaluation
 
+With `final.estimates.sf` we can now move on with the Evaluation module.
+
 ### Spatial Density
+
+Here, we provide code to develop spatial density maps of each estimator.
 
 ```{r estimation-maps}
 # Define break points for discretized spatial density plots
@@ -641,11 +688,12 @@ maps.input <- final.estimates.sf %>%
 
 ### KWD all estimators
 
+Here, we estimate the KWD. For this we need to specify three parameters, the 2d distribution of the tiles (which tile is where), the weights of tiles (the estimation vectors) and the reference distribution (GTP), and the coprime parameter `L`. After estimating the KWD, we each KWD value describes the KWD for an estimator and a particular version and we save everything in a handy dataframe (`kwd.eval`) for further visualization.
+
 ```{r kwd-computation}
 # develop dataframe with GTP, all final estimates and tile centroids
 kwd.helper.est <- final.estimates.sf %>% 
   dplyr::select(tile.id.num, pop, all_of(names.final.estimates)) %>%
-  # dplyr::select(-c(elevation, type), -matches("prior")) %>%
   st_centroid() %>% 
   mutate(lon = unlist(map(.$geometry, 1)),
          lat = unlist(map(.$geometry, 2))) %>% 
@@ -658,12 +706,11 @@ coordinates <- kwd.helper.est %>%
 
 # Weights object
 weights <- kwd.helper.est %>% 
-  # dplyr::select(pop, matches("200")) %>%
   dplyr::select(pop, starts_with("u.")) %>%
   as.matrix()
 
 
-# Approximation parameter (the higher the more accurate)
+# Coprime parameter (the higher the more accurate)
 L = 3
 
 # Run KWD
@@ -672,48 +719,14 @@ paste("KWD runtime ( L =", L, "):", round(kwd.final$runtime / 60, 0), "min for",
       ncol(weights) - 1, "estimates and", 
       length(final.estimates.df$tile.id), "tiles")
 
+
+```
+
+```{r}
 # Define names for estimators
 names.weights <- colnames(weights)[-1]
 
 order.mismatch <- str_replace(mismatch.versions, paste0(names(gen.model.objects$C.vec.df.list), "."), "")
-
-
-# Develop data frame on the estimtor level with respective KWD values
-kwd.eval.caro <- tibble(estimator = names.weights,
-                   kwd = kwd.final$distance * 1) %>%  # rescaling according to scale
-  mutate(kwd.lower.bound = kwd - ((kwd / 100) * 1.29)) %>%  # for L=3 within 1 percent 
-  mutate(network.kind = str_extract(estimator, pattern = paste0(names(gen.model.objects$C.vec.df.list), collapse = "|"))) %>% 
-  mutate(iteration = str_extract(estimator, "[[:digit:]]+$")) %>% 
-  mutate(version = case_when(str_detect(estimator, "true") ~ "true",
-                             TRUE ~ str_extract(estimator, 
-                                                pattern = paste(c(order.mismatch, "flat"), collapse = "|")))) %>% 
-  # kind = substr(estimator, 1, 11)) %>%
-  mutate(iteration = case_when(is.na(iteration) ~ 0,
-                               TRUE ~ as.numeric(iteration))) %>% 
-  mutate(estimator.kind = str_extract(estimator, pattern = "MLE|DF|flat")) %>% 
-  group_by(version, estimator.kind) %>% 
-  mutate(final.iteration = case_when(iteration == max(iteration) ~ T,
-                                     T ~ F)) %>% 
-  mutate(min.KWD = case_when(kwd == min(kwd) ~ T,
-                             T ~ F)) %>% 
-  ungroup()  %>% 
-  mutate(version.kind = case_when(str_detect(version, "no") ~ "Noise",
-                                  str_detect(version, "quant") ~ "Quantization",
-                                  str_detect(version, "true") ~ "True",
-                                  is.na(version) ~ "True")) %>% 
-    mutate(prior.version = case_when(str_detect(estimator, "prior.1") ~ "Uninformative",
-                                   str_detect(estimator, "prior.2") ~ "Mildly informative")) %>% 
-  mutate(estimator.name = case_when_estimator(estimator, iteration)) %>% 
-  group_by(version, estimator.name) %>% 
-  mutate(final.iteration = case_when(iteration == max(iteration) ~ T,
-                                     T ~ F)) %>% 
-  mutate(min.KWD = case_when(kwd == min(kwd) ~ T,
-                             T ~ F)) %>% 
-  ungroup()
-
-saveRDS(kwd.eval, "workflow_objects/kwd.eval.rds")
-kwd.eval.caro <- readRDS("results/kwd.eval.rds")
-order.mismatch <- readRDS("results/results/order.mismatch.caro.rds")
 
 case_when_estimator <- function(estimator, iteration) {
   case_when(
@@ -733,12 +746,31 @@ case_when_estimator <- function(estimator, iteration) {
 }
 
 
-kwd.eval <- kwd.eval.caro %>% 
+# Develop data frame on the estimtor level with respective KWD values
+kwd.eval <- kwd.eval %>% 
+  tibble(estimator = names.weights,
+                   kwd = kwd.final$distance * 1) %>%  # rescaling according to scale
+  mutate(kwd.lower.bound = kwd - ((kwd / 100) * 1.29)) %>%  # for L=3 within 1 percent
+  mutate(network.kind = str_extract(estimator, pattern = paste0(names(gen.model.objects$C.vec.df.list), collapse = "|"))) %>%
+  mutate(iteration = str_extract(estimator, "[[:digit:]]+$")) %>%
+  mutate(version = case_when(str_detect(estimator, "true") ~ "true",
+                             TRUE ~ str_extract(estimator,
+                                                pattern = paste(c(order.mismatch, "flat"), collapse = "|")))) %>%
+  # kind = substr(estimator, 1, 11)) %>%
+  mutate(iteration = case_when(is.na(iteration) ~ 0,
+                               TRUE ~ as.numeric(iteration))) %>%
+  mutate(estimator.kind = str_extract(estimator, pattern = "MLE|DF|flat")) %>%
+  group_by(version, estimator.kind) %>%
+  mutate(final.iteration = case_when(iteration == max(iteration) ~ T,
+                                     T ~ F)) %>%
+  mutate(min.KWD = case_when(kwd == min(kwd) ~ T,
+                             T ~ F)) %>%
+  ungroup()  %>%
   mutate(version.kind = case_when(str_detect(version, "no") ~ "Noise",
                                   str_detect(version, "quant") ~ "Quantization",
                                   str_detect(version, "true") ~ "True",
                                   is.na(version) ~ "True")) %>% 
-  mutate(prior.version = case_when(str_detect(estimator, "prior.1") ~ "Uninformative",
+    mutate(prior.version = case_when(str_detect(estimator, "prior.1") ~ "Uninformative",
                                    str_detect(estimator, "prior.2") ~ "Mildly informative")) %>% 
   mutate(estimator.name = case_when_estimator(estimator, iteration)) %>% 
   group_by(version, estimator.name) %>% 
@@ -747,12 +779,19 @@ kwd.eval <- kwd.eval.caro %>%
   mutate(min.KWD = case_when(kwd == min(kwd) ~ T,
                              T ~ F)) %>% 
   ungroup()
+
+# partial reproduction 10
+# saveRDS(kwd.eval, "Data/Evaluation/kwd.eval.rds")
+kwd.eval <- readRDS("Data/Evaluation/kwd.eval.rds")
 ```
 
 ### KWD for estimates with no model mismatch
 
+Here, we provide code for the KWD barplot that contains no mismatched models, see Figure 8 in the thesis.
+
 ```{r kwd_1}
 
+# develop KWD difference between prior specifications
 difference <- kwd.eval %>% 
   filter(str_detect(estimator, "VOR|flat") | final.iteration == T) %>%
   filter(version.kind == "True") %>%
@@ -763,7 +802,7 @@ difference <- kwd.eval %>%
             y.axis.dif = max(kwd) + 1.7)
   
   
-
+# KWD bar plot for no model mismatch
 (kwd.final.estimates.plot <- kwd.eval %>% 
     filter(str_detect(estimator, "VOR|flat") | final.iteration == T) %>%
     filter(version.kind == "True") %>% 
@@ -791,10 +830,12 @@ difference <- kwd.eval %>%
          alpha = "Iteration", fill = "Prior") + 
     theme(legend.position = "bottom"))
 
-ggsave("kwd.evaluation.with.informative.prior.png", kwd.final.estimates.plot, dev = "png")
+# ggsave("Final Plots/kwd.evaluation.with.informative.prior.png", kwd.final.estimates.plot, dev = "png")
 ```
 
-### KWD after `r n.iter.MLE` iterations
+### KWD after 10 iterations
+
+Here, we provide code for the line plots, respectively Figure 9 and 10.
 
 ```{r kwd-noise}
 order.noise.levels <- c(str_subset(order.mismatch, "true"), 
@@ -839,7 +880,7 @@ kwd.vor.helper <- kwd.eval %>%
          y = "KWD", color = "Estimator",
          title = "KWD estimates random noise model mismatch (after 10 iterations)"))
 
-ggsave("kwd.noise.plot.10.png", kwd.noise.plot, dev = "png")
+# ggsave("Final Plots/kwd.noise.plot.10.png", kwd.noise.plot, dev = "png")
   
 
 
@@ -864,10 +905,12 @@ ggsave("kwd.noise.plot.10.png", kwd.noise.plot, dev = "png")
          y = "KWD", color = "Estimator",
          title = "KWD estimates quantization model mismatch (after 10 iterations)"))
 
-ggsave("kwd.quant.plot.10.png", kwd.quant.plot, dev = "png")
+# ggsave("Final Plots/kwd.quant.plot.10.png", kwd.quant.plot, dev = "png")
 ```
 
 ### KWD convergence for numerical estimators
+
+Here, we provide code for plots investigating the convergence of the numerical estimators.
 
 ```{r kwd-convergence, warning=FALSE}
 # log scale breaks for background grid
@@ -895,9 +938,6 @@ minor.breaks <- rep(1:9, 21) * (10^rep(-10:10, each = 9))
          y = "KWD",
          title = "Random Noise: KWD convergence behavior per estimator"))
 
-ggsave("kwd.convergence.noise.plot.png", kwd.convergence.noise.plot, dev = "png",
-       width = 10)
-
 (kwd.convergence.quant.plot <- kwd.eval %>% 
     # filter(str_detect(estimator, "prior.1")) %>%
     filter(!estimator.kind == "flat") %>% 
@@ -919,16 +959,8 @@ ggsave("kwd.convergence.noise.plot.png", kwd.convergence.noise.plot, dev = "png"
          y = "KWD",
          title = "Quantization: KWD convergence behavior per estimator"))
 
-ggsave("kwd.convergence.quant.plot.png", kwd.convergence.quant.plot, dev = "png",
-       width = 10)
-
 ```
-
-
-
 
 ```{r}
 sessionInfo()
 ```
-
-

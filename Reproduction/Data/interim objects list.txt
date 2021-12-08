@@ -1,2 +1,31 @@
-Interim data objects:
+This list describes all interim data objects that are necessary for a partial reproduction. It also indicates which object is necessary at which partial reproduction stage.
 
+## Partial Reproduction 1 (Generation of network scenarios.Rmd)
+area --> containing all objects concerning the operating area, mobile phone population and prior information vectors
+
+## Partial Reproduction 2 (Generation of network scenarios.Rmd)
+cellplans.list --> containing all four cellplans
+
+## Partial Reproduction 3 (Generation of network scenarios.Rmd)
+gen.model.objects --> containing all info on the generative model (P-matrix) and the c-vectors
+
+## Partial Reproduction 5 (Model_mismatch.Rmd)
+P.long.noise.df --> containing the noised emission probabilities 
+
+## Partial Reproduction 5 (Model_mismatch.Rmd)
+P.long.quant.df --> containing the quantized emission probabilities 
+
+## Partial Reproduction 6 (Model_mismatch.Rmd)
+mismatch.versions --> containing the names of the mismatched version list 
+
+## Partial Reproduction 7 (Model_mismatch.Rmd)
+prob.est.input.list --> containing the specified parameters for the probabilisitic estimators
+
+## Partial Reproduction 8 (Model_mismatch.Rmd)
+VOR.input.list --> containing the specified parameters for the deterministic estimators
+
+## Partial Reproduction 9 (Model_mismatch.Rmd)
+final.estimates.sf --> containing all final estimation vectors
+
+## Partial Reproduction 10 (Model_mismatch.Rmd)
+kwd.eval --> containing all KWD values

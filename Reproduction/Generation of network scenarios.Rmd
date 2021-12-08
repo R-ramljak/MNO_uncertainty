@@ -164,7 +164,9 @@ munich$area.params[["base.tile.size"]] <- as.numeric(sqrt(st_area(munich$area.sf
 # storing everything in area object
 area <- munich
 
-saveRDS(area, "Data/Generation/area.rds")
+# Partial reproduction 1
+# saveRDS(area, "Data/Generation/area.rds")
+# area <- readRDS("Data/Generation/area.rds")
 ```
 
 In the following, we can see the spatial density of the GTP (see Figure 4 in the paper).
@@ -504,7 +506,9 @@ cellplans.list <- list(
   cellplan.4 = cellplan.2.layer
 )
 
+# Partial reproduction 2
 # saveRDS(cellplans.list, "Data/Generation/cellplans.list.rds")
+# cellplans.list <- readRDS("Data/Generation/cellplans.list.rds")
 ```
 
 Then, we perform the phone-to-cell association. Finally, we save the object `gen.model.objects`, which will contain three objects for further use in the workflow:
@@ -550,7 +554,11 @@ gen.model.objects <- list(C.vec.df.list = C.vec.df.list,
                           P.long.complete.df = P.long.complete.df,
                           P.long.df = P.long.df)
 
+# Partial reproduction 3
 # saveRDS(gen.model.objects, "Data/Generation/gen.model.objects.rds")
+# gen.model.objects <- readRDS("Data/Generation/gen.model.objects.rds")
+
+
 
 ```
 
