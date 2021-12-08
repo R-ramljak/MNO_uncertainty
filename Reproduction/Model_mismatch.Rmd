@@ -504,7 +504,7 @@ VOR.input.list <- list(cellplan.combined = cellplan.combined.parameter.list,
 
 # Partial reproduction 8
 # saveRDS(VOR.input.list, "Data/Estimation/VOR.input.list.rds")
-VOR.input.list <- readRDS("Data/Estimation/VOR.input.list.rds")
+# VOR.input.list <- readRDS("Data/Estimation/VOR.input.list.rds")
 ```
 
 ### Voronoi estimators
@@ -782,7 +782,7 @@ kwd.eval <- kwd.eval %>%
 
 # partial reproduction 10
 # saveRDS(kwd.eval, "Data/Evaluation/kwd.eval.rds")
-kwd.eval <- readRDS("Data/Evaluation/kwd.eval.rds")
+# kwd.eval <- readRDS("Data/Evaluation/kwd.eval.rds")
 ```
 
 ### KWD for estimates with no model mismatch
