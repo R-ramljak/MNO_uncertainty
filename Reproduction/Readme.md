@@ -1,6 +1,6 @@
 # Reproduction
 
-This folder contains all necessary data, scripts and instructions to *fully reproduce* the results of the study. This is a simulation study building on semi-synthetic data, therefore, all results should be reproducible using only the non-synthetic data source, the developed R-code and the indicated R-packages.
+This folder contains all necessary data, scripts and instructions to *fully reproduce* the results of the study. This is a simulation study building on semi-synthetic data, therefore, all results should be reproducible using only the non-synthetic data source, the developed R-code and the indicated R-packages. You can find information of the package versions at the end of this [notebook](...)
 
 For easier and speedier reproduction of certain parts, we have uploaded interim data objects to a cloud service. This makes *partial reproductions* possible. Unfortunately, we cannot create a simple link to share in this repo because the Utrecht University administrators only allow sharing the folders with specified people. Therefore, please just write an [email](marcoramljak@googlemail.com) and the folder will be shared with you, without any restrictions.
 
@@ -22,7 +22,9 @@ This study follows the logics of the MNO-simulator workflow, see the figure belo
 
 -   Download the [2011 German census data on a regular grid](https://www.zensus2011.de/SharedDocs/Downloads/DE/Pressemitteilung/DemografischeGrunddaten/csv_Bevoelkerung_100m_Gitter.zip;jsessionid=2447684734B1934C8AD8042D9236B37A.live931?__blob=publicationFile&v=2). Further info on the file can be found [here](https://www.zensus2011.de/DE/Home/Aktuelles/DemografischeGrunddaten.html?nn=3065474).
 
--   Unzip the downloaded file into the [Data](https://github.com/R-ramljak/MNO_uncertainty/tree/main/Reproduction/Data) folder.
+-   Unzip the downloaded file into the [Dissemination/Data](https://github.com/R-ramljak/MNO_uncertainty/tree/main/Reproduction/Data) folder.
+
+-   Create the following three folders within Dissemination/Data: Generation, Estimation, Evaluation.
 
 -   If RStudio is available, open the [MNO_uncertainty.Rproj](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/MNO_uncertainty.Rproj) file for easier path management.
 
