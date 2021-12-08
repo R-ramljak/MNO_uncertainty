@@ -20,12 +20,6 @@ munich <- census.raw %>%
                          is.na(bin.helper) ~ as.integer(round(pop.pert / 3, 0)))) %>%  # reduce population to 1/3 to mimic the mobile phone pop from one MNO
   mutate(elevation = 0)
 
-munich %>% 
-  filter(pop.raw > 50) %>% 
-  st_as_sf(coords = c("x", "y")) %>% 
-  ggplot() +
-  geom_sf(aes(color = as.numeric(pop.raw)))
-
 sum(munich$pop.pert)
 
 
