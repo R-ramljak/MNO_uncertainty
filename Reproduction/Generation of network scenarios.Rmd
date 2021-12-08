@@ -2,7 +2,6 @@
 title: "MNO_uncertainty: Generation of network scenarios"
 author: "Marco Ramljak"
 date: "`r Sys.Date()`"
-bibliography: librarynew.bib
 output:
   bookdown::html_document2:
     code_folding: show
@@ -22,17 +21,17 @@ knit: (function(input_file, encoding) { out_dir <- 'docs'; rmarkdown::render(inp
   font-size: 1em;
 }
   body {
-  font-size: 12pt;
+  font-size: 11pt;
 }
 </style>
 ```
-This notebook provides **supplementary material** for my thesis project titled: "**Tackling Uncertainty in the Spatial Density Estimation from Mobile Network Operator data**". It focuses on the first module of the MNO-simulator workflow, the generation of network scenarios. Its goal is to provide the complete code for reproduction and understanding, and in-depth analysis of the four different network scenarios.
+This notebook provides **supplementary material** for my thesis project titled: "**Tackling Uncertainty in the Spatial Density Estimation from Mobile Network Operator data**". It focuses on the first module of the MNO-simulator workflow, the generation of network scenarios. Its goal is to provide the complete code for reproduction and in-depth analysis of the four different network scenarios. Further information of this project can be found [here](https://github.com/R-ramljak/MNO_uncertainty).
 
-As mentioned on page 4 we need to create three data sources:
+As mentioned on page 4 of the [thesis article](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Dissemination/Thesis%20Manuscript/thesis%20marco%20ramljak.pdf), we need to create three data sources:
 
--   "Operating area data: We assume the operating area to be discretized into a regular grid, e.g., 100m x 100m. Each square unit is termed as a tile, indexed in $j = 1,2, \ldots, J$. $u_j$ denotes the unknown non-negative number of mobile phones of the $j$th tile, stored in the column vector $u := [u_{1}… u_{J}]^{T}$. This standardized unit helps us set a formalism framework that has been used in multiple studies beforehand \cite{Tennekes2021, Ricciato2021, Ricciato2017}.
+-   "Operating area data: We assume the operating area to be discretized into a regular grid, e.g., 100m x 100m. Each square unit is termed as a tile, indexed in $j = 1,2, \ldots, J$. $u_j$ denotes the unknown non-negative number of mobile phones of the $j$th tile, stored in the column vector $u := [u_{1}… u_{J}]^{T}$. This standardized unit helps us set a formalism framework that has been used in multiple studies beforehand [19, 22, 28].
 
--   Aggregated network event data: Let the $i$th element $c_{i}$ of the column vector $c := [c_{1}… c_{I}]^{T}$ define the observed number of phones counted in cell $i = 1,2, \ldots, I$. Furthermore, we formalize the total number of phones across all cells by $C := \sum_{i = 1}^{I} c_{i} = 1_{I}^{T}c$, the assumed total number of individual phones in the operating area. As in \cite{Ricciato2021} $c$ describes a cell count vector, aggregating all estimable phones around a reference time $t^*$. In this study we ignore the time dimension and focus only on the spatial density estimation of a certain point in time.
+-   Aggregated network event data: Let the $i$th element $c_{i}$ of the column vector $c := [c_{1}… c_{I}]^{T}$ define the observed number of phones counted in cell $i = 1,2, \ldots, I$. Furthermore, we formalize the total number of phones across all cells by $C := \sum_{i = 1}^{I} c_{i} = 1_{I}^{T}c$, the assumed total number of individual phones in the operating area. As in [19] $c$ describes a cell count vector, aggregating all estimable phones around a reference time $t^*$. In this study we ignore the time dimension and focus only on the spatial density estimation of a certain point in time.
 
 -   Network topology data: This data source describes the configuration parameters of each relevant cell within the operating area. It can come in various levels of detail, ranging from only knowing the cell tower locations to having precise information on the azimuth direction, transmission power, beamwidth, etc. This data is used within MNO's to improve the network via radio propagation modeling."
 
@@ -85,7 +84,7 @@ set.seed(42)
 
 
 # Loading Custom functions
-source("code/pipeline functions.R")
+source("pipeline functions.R")
 
 ```
 
@@ -165,7 +164,7 @@ munich$area.params[["base.tile.size"]] <- as.numeric(sqrt(st_area(munich$area.sf
 # storing everything in area object
 area <- munich
 
-# saveRDS(area, "Data/workflow_objects/areas.rds")
+saveRDS(area, "Data/Generation/area.rds")
 ```
 
 In the following, we can see the spatial density of the GTP (see Figure 4 in the paper).
@@ -275,7 +274,7 @@ celplan.1.spat.param$coverage.map.complete
 
 ### Cellplan.2: One layer, dense network
 
-```{r, cellplan.1.gen, message=FALSE, warning=FALSE, fig.height=8, fig.width=10, fig.cap="Theoretical radio network parameters for each layer"}
+```{r, cellplan.2.gen, message=FALSE, warning=FALSE}
 # specify parameters of each cell
 ME.cell.param.mobloc <- mobloc_param(W = 50, range = 8000, ple = 3.7, height = 10,
                                      midpoint = -85, steepness = 0.3, sig_d_th = 0.05)
@@ -336,7 +335,7 @@ celplan.2.spat.param$coverage.map.complete
 
 ### Cellplan.3: Three layer network
 
-```{r, network-parameters, message=FALSE, warning=FALSE, fig.height=8, fig.width=10, fig.cap="Theoretical radio network parameters for each layer"}
+```{r, cellplan.3.gen, message=FALSE}
 # specify parameters of each cell
 MA.cell.param.mobloc <- mobloc_param(W = 5, # Power in Watts
                                      range = 10000, # maximum coverage range
@@ -421,7 +420,7 @@ celplan.3.spat.param$coverage.map.complete
 
 ### Cellplan.4: Two layer network
 
-```{r, network-parameters, message=FALSE, warning=FALSE, fig.height=8, fig.width=10, fig.cap="Theoretical radio network parameters for each layer"}
+```{r, cellplan.4.gen, message=FALSE}
 # specify parameters of each cell
 ME.cell.param.mobloc <- mobloc_param(W = 50, range = 8000, ple = 3.7, height = 10,
                                      midpoint = -85, steepness = 0.3, sig_d_th = 0.05)
@@ -495,7 +494,7 @@ After this presentation of each cellplan we will perform now the phone-to-cell a
 
 Here we bring the mobile phone population with each network together and stochastically assign the mobile phone population in each tile to the respective cells. The result is the so-called c-vector (i.e., $c$), which describes the number of mobile phones assigned to each cell. The basis parameter for this assignment is the signal dominance which is normalized in the form of a conditional probability. These conditional probabilities (emission probabilities) describe the elements of $P$.
 
-First, we combine all cellplan objects into the list object `cellplans.list`, which helps with automatizing each phone-to-cell association task.
+First, we combine and save all cellplan objects into the list object `cellplans.list`, which helps with automatizing each phone-to-cell association task.
 
 ```{r}
 cellplans.list <- list(
@@ -505,10 +504,10 @@ cellplans.list <- list(
   cellplan.4 = cellplan.2.layer
 )
 
-# saveRDS(cellplans.list, "workflow_objects/cellplans.list.rds")
+# saveRDS(cellplans.list, "Data/Generation/cellplans.list.rds")
 ```
 
-Then, we perform the phone-to-cell association. In the end of this notebook we save the object `gen.model.objects`, which will contain three objects for further use in the workflow:
+Then, we perform the phone-to-cell association. Finally, we save the object `gen.model.objects`, which will contain three objects for further use in the workflow:
 
 -   `C.vec.df.list`: This object contains the c-vector for each network scenario.
 
@@ -524,27 +523,26 @@ signal.strength.llh.param <- list(sig_d_th = 0.05,
                                   max_overlapping_cells = 100)
 
 # define connection llh and classify tiles depending on coverage status
-connection.llh.list <- map(cellplans.list, ~create_strength_llh_custom(.x$signal.strength.comb.dt,
-                                                                       signal.strength.llh.param, 
-                                                                       smart.rounding.digits = 3, 
+connection.llh.list <- map(cellplans.list, ~create_strength_llh_custom(signal.strength.comb.dt = .x$signal.strength.comb.dt,
+                                                                       signal.strength.llh.param = signal.strength.llh.param,
+                                                                       smart.rounding.digits = 3,
                                                                        area.df = area$area.df))
-                      
+
 
 # create c-vector
-C.vec.df.list <- map(connection.llh.list, ~create_c_vector(.x$signal.strength.llh.combined))
+C.vec.df.list <- map(connection.llh.list, ~create_c_vector(signal.strength.llh.combined = .x$signal.strength.llh.combined))
 
 # develop long format of P matrix which also contains certain cellplan parameters and "zero elements"
 # develop different versions of id variables (tile and antennas) for easier joining
-P.long.complete.df <- map2(connection.llh.list, C.vec.df.list, ~full_join(.x$signal.strength.llh.combined, .y, by = "cell")) %>% 
-  # dplyr::select(tile.id, pop, elevation, cell, type, dist, pij, phones.sum) %>% 
-  map(~dplyr::select(., tile.id.chr,, tile.id.fac, tile.id.num, pop, cell, type, dist, pij, phones.sum)) %>% 
-  map(~mutate(., cell.chr = as.character(cell))) %>% 
-  map2(cellplans.list, ~mutate(.x, cell.fac = factor(cell.chr, levels = fct_unique(.y$cellplan.combined.df$cell.fac)))) %>% 
+P.long.complete.df <- map2(connection.llh.list, C.vec.df.list, ~full_join(.x$signal.strength.llh.combined, .y, by = "cell")) %>%
+  map(~dplyr::select(., tile.id.chr,, tile.id.fac, tile.id.num, pop, cell, type, dist, pij, phones.sum)) %>%
+  map(~mutate(., cell.chr = as.character(cell))) %>%
+  map2(cellplans.list, ~mutate(.x, cell.fac = factor(cell.chr, levels = fct_unique(.y$cellplan.combined.df$cell.fac)))) %>%
   map(~mutate(., cell.num = as.numeric(cell.fac)))
 
 # Long format of P matrix with minimal variables and and unique rows
-P.long.df <- P.long.complete.df %>% 
-  map(~dplyr::select(., tile.id.chr, tile.id.fac, tile.id.num, cell.chr, cell.fac, cell.num, pij)) %>% 
+P.long.df <- P.long.complete.df %>%
+  map(~dplyr::select(., tile.id.chr, tile.id.fac, tile.id.num, cell.chr, cell.fac, cell.num, pij)) %>%
   map(~distinct(.))
 
 
@@ -552,12 +550,10 @@ gen.model.objects <- list(C.vec.df.list = C.vec.df.list,
                           P.long.complete.df = P.long.complete.df,
                           P.long.df = P.long.df)
 
-# saveRDS(gen.model.objects, "workflow_objects/gen.model.objectss.rds")
+# saveRDS(gen.model.objects, "Data/Generation/gen.model.objects.rds")
 
 ```
-
 
 ```{r}
 sessionInfo()
 ```
-
