@@ -2,7 +2,7 @@ library(data.table)
 library(tidyverse)
 
 # loading in census data
-census.raw <- fread("Data/Zensus_Bevoelkerung_100m-Gitter.csv")
+census.raw <- fread("Data/Raw/Zensus_Bevoelkerung_100m-Gitter.csv")
 
 # define the focus region (bounding box) and execute necessary population manipulation to yield about 1/3 of the population
 munich <- census.raw %>% 
@@ -29,7 +29,7 @@ munich %>%
 sum(munich$pop.pert)
 
 
-saveRDS(munich, "Data/munich.rds")
+saveRDS(munich, "Data/Raw/munich.rds")
 
 
 

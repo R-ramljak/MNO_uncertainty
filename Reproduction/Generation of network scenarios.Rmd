@@ -98,7 +98,7 @@ In the following chunk we load in the focus area data and create the `area` obje
 
 ```{r population-data}
 # data read in
-munich.raw <- readRDS("Data/munich.rds")
+munich.raw <- readRDS("Data/Raw/munich.rds")
 
 # define raster object from focus area and set the coordinate reference system (crs)
 munich.raster <- rasterFromXYZ(munich.raw, crs = st_crs(3035)$proj4string)
