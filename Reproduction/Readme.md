@@ -4,7 +4,7 @@ This folder contains all necessary data, scripts and instructions to *fully repr
 
 For easier and speedier reproduction of certain parts, we have uploaded interim data objects to a cloud service. This makes *partial reproductions* possible. Unfortunately, we cannot create a simple link to share in this repo because the Utrecht University administrators only allow sharing the folders with specified people. Therefore, please just write an [email](marcoramljak@googlemail.com) and the folder will be shared with you, without any restrictions.
 
-This study follows the logics of the MNO-simulator workflow, see the figure below. For this we developed four scripts, two regular `\*.R` scripts and two `\*.Rmd` notebooks. We have chosen the notebook format for the main simulation steps as this format allows for easy combination of code, results/plots and description/interpretation.
+This study follows the modular structure of the MNO-simulator workflow, see the figure below. For this we developed four scripts, two regular `\*.R` scripts and two `\*.Rmd` notebooks. We have chosen the notebook format for the main simulation steps as this format allows for easy combination of code, results/plots and description/interpretation.
 
 -   `pipeline functions.R`: Contains all developed custom functions and needs to be preloaded via `source()` for the further notebooks to work. This is basically the heart of the MNO-simulator workflow.
 
@@ -28,7 +28,7 @@ This study follows the logics of the MNO-simulator workflow, see the figure belo
 
 -   If RStudio is available, open the [MNO_uncertainty.Rproj](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/MNO_uncertainty.Rproj) file for easier path management.
 
--   Run the the [Munich_generate.R](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Munich_generate.R) script. Make sure the object [munich.rds]() is saved in the Data folder.
+-   Run the the [Munich_generate.R](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Munich_generate.R) script. Make sure the object [munich.rds](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Data/munich.rds) is saved in the Data folder.
 
 -   Make sure the object `munich.rds` is saved. For convenience purposes, the folder already contains this processed [file](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Data/munich.rds).
 
@@ -46,7 +46,9 @@ Depending on the fact if you use the RStudio project file, file path adjustment 
 
 -   If RStudio is available, open the [MNO_uncertainty.Rproj](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/MNO_uncertainty.Rproj) file for easier path management.
 
--   Depending on which results you want to reproduce or which other code blocks you want to experiment with, you can follow this [file](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Data/interim%20objects%20list.txt). It describes, which `*.rds` object contains which information and where it is loaded into one of the two main notebooks, according to *Partial reproduction \#'s*. These need to be handled in a continous dependent fashion, meaning if you want to reproduce everything from number 7 onwards you need load in the pervious numbers as well. Also, sometimes some intermediary objects that are created between *Partial reproduction \#'s* need to be created by running the code.
+-   Depending on which results you want to reproduce or which other code blocks you want to experiment with, you can follow this [file](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Data/interim%20objects%20list.txt). It describes, which `*.rds` object contains which information and where it is loaded into one of the two main notebooks, according to *Partial reproduction \#'s*.
+
+-   Choose a *Partial reproduction \#* and search for it in the indicated notebook. *Partial reproduction \#* need to be handled in a continuous dependent fashion, meaning, if you want to reproduce everything from number 7 onward you need to load all previous numbers as well. Also, sometimes some intermediary objects that are created between *Partial reproduction \#'s* need to be created by running the respective code.
 
 ## License
 
