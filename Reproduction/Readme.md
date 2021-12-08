@@ -42,11 +42,11 @@ Depending on the fact if you use the RStudio project file, file path adjustment 
 
 -   Clone/Fork/Download this repository.
 
--   Make sure that you have access to the interim data objects and copy them into the predefined Data folder.
+-   Make sure that you have access to the interim data objects and **replace** the Reproduction/Data folder with the Data folder from the cloud.
 
 -   If RStudio is available, open the [MNO_uncertainty.Rproj](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/MNO_uncertainty.Rproj) file for easier path management.
 
--   Depending on which results you want to reproduce or which other code blocks you want to experiment with, you can follow this [file](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Data/interim%20objects%20list.txt). It describes, which `*.rds` object contains which information and where it is loaded into one of the two main notebooks.
+-   Depending on which results you want to reproduce or which other code blocks you want to experiment with, you can follow this [file](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Reproduction/Data/interim%20objects%20list.txt). It describes, which `*.rds` object contains which information and where it is loaded into one of the two main notebooks, according to *Partial reproduction #'s*. These need to be handled in a continous dependent fashion, meaning if you want to reproduce everything from number 7 onwards you need load in the pervious numbers as well. Also, sometimes some intermediary objects that are created between *Partial reproduction #'s* need to be created by running the code.
 
 ## License
 
