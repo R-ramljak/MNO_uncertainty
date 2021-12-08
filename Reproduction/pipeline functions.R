@@ -1636,7 +1636,7 @@ create_strength_llh_custom <- function(signal.strength.comb.dt,
     summarise(count = n())
   
   # how many tiles are not sufficiently covered
-  missings <- anti_join(area$area.df, tiles.cat, by = "tile.id.num") # implement non zero pop
+  missings <- anti_join(area.df, tiles.cat, by = "tile.id.num") # implement non zero pop
   cat(paste("Number of tiles which are unsufficiently covered:", length(missings$tile.id.num)))
   
   return(list(signal.strength.llh.combined = signal.strength.llh.combined,
