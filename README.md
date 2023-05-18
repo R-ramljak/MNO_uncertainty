@@ -12,7 +12,7 @@
 
 ## Repository information
 
-**Full article (not reviewed):** You can find the full article [here](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Dissemination/Thesis%20Manuscript/thesis%20marco%20ramljak.pdf).
+**Full article (not reviewed):** You can find the full article in the format of a journal [here](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Dissemination/Thesis%20Manuscript/thesis%20marco%20ramljak.pdf) and in a neutral format [here](https://github.com/R-ramljak/MNO_uncertainty/blob/main/Dissemination/Thesis%20Manuscript/thesis_neutral_version.pdf).
 
 **Supplementary Material (network scenarios):** You can find supplementary material relating to the network scenarios [here](https://r-ramljak.github.io/MNO_uncertainty/).
 
