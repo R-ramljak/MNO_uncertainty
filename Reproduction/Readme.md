@@ -1,6 +1,6 @@
 # Reproduction
 
-This folder contains all necessary data, scripts and instructions to *fully reproduce* the results of the study. This is a simulation study building on semi-synthetic data, therefore, all results should be reproducible using only the non-synthetic data source, the developed R-code and the indicated R-packages. You can find information of the package versions at the end of this [notebook](...)
+This folder contains all necessary data, scripts and instructions to *fully reproduce* the results of the study. This is a simulation study building on semi-synthetic data, therefore, all results should be reproducible using only the non-synthetic data source, the developed R-code and the indicated R-packages. You can find information of the package versions at the end of this [notebook](https://r-ramljak.github.io/MNO_uncertainty/#23_Device-to-cell_association_(Generative_model)).
 
 For easier and speedier reproduction of certain parts, we have uploaded interim data objects to a cloud service. This makes *partial reproductions* possible. Unfortunately, we cannot create a simple link to share in this repo because the Utrecht University administrators only allow sharing the folders with specified people. Therefore, please just write an [email](marcoramljak@googlemail.com) and the folder will be shared with you, without any restrictions.
 
